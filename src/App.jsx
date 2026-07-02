@@ -1,0 +1,198 @@
+import React, { useState, useEffect, useCallback } from "react";
+import { Loader2 } from "lucide-react";
+import { COLORS, SUPABASE_CONFIGURED } from "./lib/constants";
+import { todayStr } from "./lib/utils";
+import {
+  loadEmployees, saveEmployees, loadAttendance, saveAttendanceRecord,
+  loadAccounts, SEED_EMPLOYEES, recKey,
+} from "./lib/db";
+import { notifyHR } from "./lib/email";
+
+import Splash from "./components/Splash";
+import Login from "./components/Login";
+import Shell from "./components/Shell";
+
+import TodayView from "./views/Today";
+import LogView from "./views/Log";
+import EmployeesView from "./views/Employees";
+import ReportsView from "./views/Reports";
+import MonthlyReportView from "./views/MonthlyReport";
+import EmployeeDashboard from "./views/EmployeeDashboard";
+
+export default function App() {
+  const [stage, setStage] = useState("boot"); // boot -> login -> entering -> app
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
+
+  const [employees, setEmployees] = useState([]);
+  const [attendance, setAttendance] = useState({});
+  const [accountsByEmp, setAccountsByEmp] = useState({});
+  const [now, setNow] = useState(new Date());
+  const [saveState, setSaveState] = useState("idle");
+
+  const [session, setSession] = useState(null); // {id, username, role, employeeId, name}
+  const [tab, setTab] = useState("today");
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  useEffect(() => {
+    if (!SUPABASE_CONFIGURED) { setLoading(false); return; }
+    (async () => {
+      try {
+        let emps = await loadEmployees();
+        const att = await loadAttendance();
+        if (emps.length === 0) { emps = SEED_EMPLOYEES; await saveEmployees(emps, []); }
+        const accts = await loadAccounts();
+        const byEmp = {};
+        accts.forEach(a => { if (a.employeeId) byEmp[a.employeeId] = a; });
+        setEmployees(emps);
+        setAttendance(att);
+        setAccountsByEmp(byEmp);
+      } catch (e) {
+        setLoadError(e.message);
+      }
+      setLoading(false);
+    })();
+  }, []);
+
+  const refreshAccounts = useCallback(async () => {
+    const accts = await loadAccounts();
+    const byEmp = {};
+    accts.forEach(a => { if (a.employeeId) byEmp[a.employeeId] = a; });
+    setAccountsByEmp(byEmp);
+  }, []);
+
+  const persistEmployees = useCallback(async (next) => {
+    const prev = employees;
+    setEmployees(next);
+    setSaveState("saving");
+    try { await saveEmployees(next, prev); setSaveState("saved"); }
+    catch { setSaveState("error"); }
+  }, [employees]);
+
+  /* Raw punch — writes to Supabase, no email. Used by both admin quick actions and employee CTAs. */
+  const punch = useCallback((empId, action, meta) => {
+    const date = todayStr();
+    const key = recKey(empId, date);
+    const existing = attendance[key] || { type: "office" };
+    let rec;
+    if (action === "in") rec = { ...existing, checkIn: new Date().toISOString(), type: existing.type === "leave" ? "office" : existing.type || "office" };
+    else if (action === "out") rec = { ...existing, checkOut: new Date().toISOString() };
+    else if (action === "wfh_in") rec = { ...existing, wfhCheckIn: new Date().toISOString(), type: "wfh", wfhReason: meta?.reason, wfhLocation: meta?.location };
+    else if (action === "wfh_out") rec = { ...existing, wfhCheckOut: new Date().toISOString() };
+    else if (action === "leave") rec = { ...existing, type: "leave", checkIn: null, checkOut: null, wfhCheckIn: null, wfhCheckOut: null };
+    else if (action === "alternate") rec = { ...existing, alternateDay: true };
+    else return;
+
+    setAttendance(prev => ({ ...prev, [key]: rec }));
+    setSaveState("saving");
+    saveAttendanceRecord(empId, date, rec, "web")
+      .then(() => setSaveState("saved"))
+      .catch(() => setSaveState("error"));
+  }, [attendance]);
+
+  /* Wrapper used by the employee dashboard — punches, then emails HR. */
+  const punchWithNotify = useCallback((empId, action, meta) => {
+    punch(empId, action, meta);
+    const emp = employees.find(e => e.id === empId);
+    const ACTION_LABEL = {
+      in: "checked in", out: "checked out", wfh_in: "started working from home",
+      wfh_out: "ended their WFH session", leave: "marked leave", alternate: "marked an alternate day",
+    };
+    notifyHR({
+      subject: `RankViz — ${emp?.name || "An employee"} ${ACTION_LABEL[action] || "updated attendance"}`,
+      lines: [
+        `Employee: ${emp?.name}`,
+        `Action: ${ACTION_LABEL[action] || action}`,
+        `Time: ${new Date().toLocaleString()}`,
+        meta?.reason ? `Reason: ${meta.reason}` : null,
+        meta?.location ? `Location: ${meta.location}` : null,
+      ].filter(Boolean),
+    });
+  }, [punch, employees]);
+
+  const handleLogin = (acct) => {
+    setSession(acct);
+    setTab("today");
+    setStage("entering");
+  };
+  const handleLogout = () => { setSession(null); setStage("login"); };
+
+  if (!SUPABASE_CONFIGURED) return <ConfigNotice />;
+  if (loadError) return <ErrorNotice message={loadError} />;
+
+  if (loading) {
+    return (
+      <div style={{ height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: COLORS.bg }}>
+        <Loader2 className="rv-spin" color={COLORS.orange} size={32} />
+      </div>
+    );
+  }
+
+  if (stage === "boot") return <Splash onDone={() => setStage("login")} />;
+  if (stage === "login") return <Login onLogin={handleLogin} />;
+  if (stage === "entering") {
+    return (
+      <Splash
+        holdMs={900}
+        subtitle={session.role === "admin" ? `Welcome back, ${session.name?.split(" ")[0] || "there"}` : `Hi, ${session.name?.split(" ")[0] || "there"} — have a great day`}
+        onDone={() => setStage("app")}
+      />
+    );
+  }
+
+  if (session.role === "employee") {
+    const emp = employees.find(e => e.id === session.employeeId);
+    if (!emp) return <ErrorNotice message="Your account isn't linked to an employee record. Ask HR to check your login." />;
+    return (
+      <EmployeeDashboard
+        employee={emp}
+        attendance={attendance}
+        punch={punchWithNotify}
+        now={now}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
+  return (
+    <div style={{ fontFamily: "'Inter', system-ui, sans-serif", background: COLORS.bg, minHeight: "100vh", color: COLORS.ink }}>
+      <Shell tab={tab} setTab={setTab} saveState={saveState} account={session} onLogout={handleLogout}>
+        {tab === "today" && <TodayView employees={employees} attendance={attendance} now={now} punch={punch} />}
+        {tab === "log" && <LogView employees={employees} attendance={attendance} now={now} />}
+        {tab === "employees" && (
+          <EmployeesView employees={employees} setEmployees={persistEmployees} accounts={accountsByEmp} refreshAccounts={refreshAccounts} />
+        )}
+        {tab === "reports" && <ReportsView employees={employees} attendance={attendance} now={now} />}
+        {tab === "monthly" && <MonthlyReportView employees={employees} attendance={attendance} now={now} />}
+      </Shell>
+    </div>
+  );
+}
+
+function ConfigNotice() {
+  return (
+    <div style={{ minHeight: "100vh", background: COLORS.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'Inter', system-ui, sans-serif" }}>
+      <div className="rv-card" style={{ padding: 28, maxWidth: 460 }}>
+        <h2 style={{ marginTop: 0 }}>Connect your database</h2>
+        <p style={{ color: COLORS.muted, fontSize: 14.5, lineHeight: 1.6 }}>
+          Run <code>supabase_schema.sql</code> in your Supabase project, then paste your Project URL and anon key
+          into <code>src/lib/constants.js</code>.
+        </p>
+      </div>
+    </div>
+  );
+}
+function ErrorNotice({ message }) {
+  return (
+    <div style={{ minHeight: "100vh", background: COLORS.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <div className="rv-card" style={{ padding: 28, maxWidth: 460 }}>
+        <h2 style={{ marginTop: 0, color: COLORS.red }}>Something went wrong</h2>
+        <p style={{ color: COLORS.muted, fontSize: 14 }}>{message}</p>
+      </div>
+    </div>
+  );
+}

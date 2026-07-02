@@ -1,0 +1,136 @@
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./constants";
+import { uid, todayStr } from "./utils";
+
+export async function supaFetch(path, options = {}) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    ...options,
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Supabase ${res.status}: ${text}`);
+  }
+  if (res.status === 204) return null;
+  return res.json().catch(() => null);
+}
+
+/* ---------------- Employees ---------------- */
+function empToRow(e) {
+  return {
+    id: e.id, name: e.name, department: e.department,
+    employment_type: e.employmentType, shift_start: e.shiftStart, shift_end: e.shiftEnd,
+    zk_user_id: e.zkUserId || null,
+  };
+}
+function rowToEmp(r) {
+  return {
+    id: r.id, name: r.name, department: r.department,
+    employmentType: r.employment_type, shiftStart: r.shift_start, shiftEnd: r.shift_end,
+    zkUserId: r.zk_user_id || "",
+  };
+}
+export async function loadEmployees() {
+  const rows = await supaFetch("employees?select=*&order=name.asc");
+  return (rows || []).map(rowToEmp);
+}
+export async function saveEmployees(next, prev) {
+  const nextIds = new Set(next.map(e => e.id));
+  const removed = prev.filter(e => !nextIds.has(e.id));
+  for (const r of removed) {
+    await supaFetch(`employees?id=eq.${encodeURIComponent(r.id)}`, { method: "DELETE" });
+  }
+  if (next.length) {
+    await supaFetch("employees?on_conflict=id", {
+      method: "POST",
+      headers: { Prefer: "resolution=merge-duplicates" },
+      body: JSON.stringify(next.map(empToRow)),
+    });
+  }
+}
+
+/* ---------------- Attendance ---------------- */
+export async function loadAttendance() {
+  const rows = await supaFetch("attendance?select=*");
+  const map = {};
+  (rows || []).forEach(r => {
+    map[`${r.employee_id}|${r.date}`] = {
+      checkIn: r.check_in, checkOut: r.check_out, type: r.type,
+      wfhCheckIn: r.wfh_check_in, wfhCheckOut: r.wfh_check_out,
+      alternateDay: !!r.alternate_day, leaveReason: r.leave_reason || "",
+    };
+  });
+  return map;
+}
+export async function saveAttendanceRecord(employeeId, date, rec, source) {
+  await supaFetch("attendance?on_conflict=employee_id,date", {
+    method: "POST",
+    headers: { Prefer: "resolution=merge-duplicates" },
+    body: JSON.stringify([{
+      employee_id: employeeId, date,
+      check_in: rec.checkIn || null, check_out: rec.checkOut || null,
+      type: rec.type || "office", source: source || "web",
+      wfh_check_in: rec.wfhCheckIn || null, wfh_check_out: rec.wfhCheckOut || null,
+      alternate_day: !!rec.alternateDay, leave_reason: rec.leaveReason || null,
+    }]),
+  });
+}
+
+/* ---------------- User accounts (admin / employee login) ---------------- */
+function rowToAccount(r) {
+  return { id: r.id, username: r.username, role: r.role, employeeId: r.employee_id || null, name: r.name || "" };
+}
+export async function loadAccounts() {
+  const rows = await supaFetch("app_users?select=id,username,role,employee_id,name");
+  return (rows || []).map(rowToAccount);
+}
+export async function findAccountByUsername(username) {
+  const rows = await supaFetch(`app_users?username=eq.${encodeURIComponent(username.trim().toLowerCase())}&select=*`);
+  return (rows && rows[0]) || null;
+}
+export async function createAdminAccount({ name, username, password }) {
+  const existing = await findAccountByUsername(username);
+  if (existing) throw new Error("That username/email is already registered.");
+  const row = {
+    id: uid("usr"), username: username.trim().toLowerCase(), password, role: "admin",
+    name, employee_id: null, created_at: new Date().toISOString(),
+  };
+  await supaFetch("app_users", { method: "POST", body: JSON.stringify([row]) });
+  return rowToAccount(row);
+}
+export async function upsertEmployeeCredentials({ employeeId, name, username, password }) {
+  const rows = await supaFetch(`app_users?employee_id=eq.${encodeURIComponent(employeeId)}&select=id`);
+  const existingId = rows && rows[0] && rows[0].id;
+  const row = {
+    id: existingId || uid("usr"), username: username.trim().toLowerCase(),
+    password, role: "employee", name, employee_id: employeeId,
+    created_at: new Date().toISOString(),
+  };
+  await supaFetch("app_users?on_conflict=id", {
+    method: "POST",
+    headers: { Prefer: "resolution=merge-duplicates" },
+    body: JSON.stringify([row]),
+  });
+  return rowToAccount(row);
+}
+export async function verifyLogin(username, password) {
+  const row = await findAccountByUsername(username);
+  if (!row || row.password !== password) return null;
+  return rowToAccount(row);
+}
+
+export const SEED_EMPLOYEES = [
+  { id: uid("emp"), name: "Ananya Rao", department: "Human Resources", employmentType: "Full-time", shiftStart: "09:30", shiftEnd: "18:30" },
+  { id: uid("emp"), name: "Vikram Shah", department: "Engineering", employmentType: "Full-time", shiftStart: "10:00", shiftEnd: "19:00" },
+  { id: uid("emp"), name: "Priya Menon", department: "Design", employmentType: "Full-time", shiftStart: "09:30", shiftEnd: "18:30" },
+  { id: uid("emp"), name: "Rahul Nair", department: "Sales", employmentType: "Full-time", shiftStart: "09:00", shiftEnd: "18:00" },
+];
+
+export function recKey(empId, date) {
+  return `${empId}|${date}`;
+}
+export { todayStr };
