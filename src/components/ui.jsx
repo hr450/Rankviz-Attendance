@@ -70,7 +70,7 @@ export const secondaryBtn = {
 export const th = { padding: "9px 12px", fontWeight: 600 };
 export const td = { padding: "12px 12px", fontSize: 14 };
 
-export function LogoMark({ size = 40, showWord = true, dark = true }) {
+export function LogoMark({ size = 40, showWord = false, dark = true }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
       <img
