@@ -123,12 +123,53 @@ export async function verifyLogin(username, password) {
   return rowToAccount(row);
 }
 
-export const SEED_EMPLOYEES = [
-  { id: uid("emp"), name: "Ananya Rao", department: "Human Resources", employmentType: "Full-time", shiftStart: "09:30", shiftEnd: "18:30" },
-  { id: uid("emp"), name: "Vikram Shah", department: "Engineering", employmentType: "Full-time", shiftStart: "10:00", shiftEnd: "19:00" },
-  { id: uid("emp"), name: "Priya Menon", department: "Design", employmentType: "Full-time", shiftStart: "09:30", shiftEnd: "18:30" },
-  { id: uid("emp"), name: "Rahul Nair", department: "Sales", employmentType: "Full-time", shiftStart: "09:00", shiftEnd: "18:00" },
-];
+/* ---------------- Leave types (HR-managed) ---------------- */
+export async function loadLeaveTypes() {
+  const rows = await supaFetch("leave_types?select=*&order=name.asc");
+  return (rows || []).map(r => ({ id: r.id, name: r.name }));
+}
+export async function createLeaveType(name) {
+  const row = { id: uid("lt"), name: name.trim() };
+  await supaFetch("leave_types", { method: "POST", body: JSON.stringify([row]) });
+  return row;
+}
+export async function deleteLeaveType(id) {
+  await supaFetch(`leave_types?id=eq.${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+/* ---------------- Leave requests (employee -> HR) ---------------- */
+function rowToLeaveRequest(r) {
+  return {
+    id: r.id, employeeId: r.employee_id, leaveTypeId: r.leave_type_id,
+    leaveTypeName: r.leave_type_name, startDate: r.start_date, endDate: r.end_date,
+    reason: r.reason || "", status: r.status, decidedBy: r.decided_by || null,
+    decidedAt: r.decided_at || null, createdAt: r.created_at,
+  };
+}
+export async function loadLeaveRequests() {
+  const rows = await supaFetch("leave_requests?select=*&order=created_at.desc");
+  return (rows || []).map(rowToLeaveRequest);
+}
+export async function createLeaveRequest({ employeeId, leaveTypeId, leaveTypeName, startDate, endDate, reason }) {
+  const row = {
+    id: uid("lv"), employee_id: employeeId, leave_type_id: leaveTypeId || null,
+    leave_type_name: leaveTypeName, start_date: startDate, end_date: endDate,
+    reason: reason || null, status: "pending",
+  };
+  await supaFetch("leave_requests", { method: "POST", body: JSON.stringify([row]) });
+  return rowToLeaveRequest(row);
+}
+export async function decideLeaveRequest(id, status, decidedBy) {
+  await supaFetch(`leave_requests?id=eq.${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ status, decided_by: decidedBy || null, decided_at: new Date().toISOString() }),
+  });
+}
+
+// No seed/demo employees — the Employees list starts empty. Add real staff
+// via the Employees tab, or (once wired up) they'll come in automatically
+// from the ZKTeco device sync.
+export const SEED_EMPLOYEES = [];
 
 export function recKey(empId, date) {
   return `${empId}|${date}`;

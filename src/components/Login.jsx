@@ -3,6 +3,7 @@ import { LogIn, UserPlus, ShieldCheck, UserCircle2, Loader2, AlertCircle } from 
 import { COLORS } from "../lib/constants";
 import { LogoMark, Field, inputStyle, primaryBtn } from "./ui";
 import { verifyLogin, createAdminAccount } from "../lib/db";
+import bgImage from "../assets/login-background.webp";
 
 export default function Login({ onLogin }) {
   const [mode, setMode] = useState("admin"); // admin | employee
@@ -49,11 +50,12 @@ export default function Login({ onLogin }) {
   return (
     <div style={{
       minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
-      background: `linear-gradient(160deg, ${COLORS.bg} 0%, #E7ECFA 100%)`, padding: 20,
+      backgroundImage: `linear-gradient(160deg, rgba(14,42,82,0.55) 0%, rgba(14,42,82,0.82) 100%), url(${bgImage})`,
+      backgroundSize: "cover", backgroundPosition: "center", padding: 20,
     }} className="rv-anim-fadein">
       <div style={{ width: "100%", maxWidth: 440 }}>
         <div style={{ display: "flex", justifyContent: "center", marginBottom: 26 }}>
-          <LogoMark size={54} dark={false} />
+          <LogoMark size={54} dark={true} />
         </div>
 
         <div className="rv-card rv-anim-slideupin" style={{ padding: "30px 28px 26px" }}>
@@ -141,7 +143,7 @@ export default function Login({ onLogin }) {
           </div>
         </div>
 
-        <p style={{ textAlign: "center", color: COLORS.muted, fontSize: 12, marginTop: 18 }}>
+        <p style={{ textAlign: "center", color: "rgba(255,255,255,0.65)", fontSize: 12, marginTop: 18 }}>
           © {new Date().getFullYear()} RankViz · hr@rankviz.com
         </p>
       </div>

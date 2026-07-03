@@ -1,6 +1,7 @@
 import React from "react";
 import { COLORS } from "../lib/constants";
 import { TONE_STYLES } from "../lib/utils";
+import logoFull from "../assets/logo-full.png";
 
 export function StatusPill({ label, tone }) {
   const s = TONE_STYLES[tone] || TONE_STYLES.pending;
@@ -72,13 +73,11 @@ export const td = { padding: "12px 12px", fontSize: 14 };
 export function LogoMark({ size = 40, showWord = true, dark = true }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-      <div style={{
-        width: size, height: size, borderRadius: size * 0.28,
-        background: `linear-gradient(135deg, ${COLORS.orange}, ${COLORS.violet})`,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        color: "#fff", fontWeight: 900, fontSize: size * 0.46, letterSpacing: -1,
-        boxShadow: "0 6px 18px rgba(47,111,237,0.35)", flexShrink: 0,
-      }}>R</div>
+      <img
+        src={logoFull}
+        alt="RankViz logo"
+        style={{ height: size, width: "auto", objectFit: "contain", flexShrink: 0, display: "block" }}
+      />
       {showWord && (
         <span style={{
           fontWeight: 800, fontSize: size * 0.44, letterSpacing: -0.3,

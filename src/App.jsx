@@ -4,7 +4,9 @@ import { COLORS, SUPABASE_CONFIGURED } from "./lib/constants";
 import { todayStr } from "./lib/utils";
 import {
   loadEmployees, saveEmployees, loadAttendance, saveAttendanceRecord,
-  loadAccounts, SEED_EMPLOYEES, recKey,
+  loadAccounts, recKey,
+  loadLeaveTypes, createLeaveType, deleteLeaveType,
+  loadLeaveRequests, createLeaveRequest, decideLeaveRequest,
 } from "./lib/db";
 import { notifyHR } from "./lib/email";
 
@@ -18,6 +20,7 @@ import EmployeesView from "./views/Employees";
 import ReportsView from "./views/Reports";
 import MonthlyReportView from "./views/MonthlyReport";
 import EmployeeDashboard from "./views/EmployeeDashboard";
+import LeaveApprovalsView from "./views/LeaveApprovals";
 
 export default function App() {
   const [stage, setStage] = useState("boot"); // boot -> login -> entering -> app
@@ -33,6 +36,9 @@ export default function App() {
   const [session, setSession] = useState(null); // {id, username, role, employeeId, name}
   const [tab, setTab] = useState("today");
 
+  const [leaveTypes, setLeaveTypes] = useState([]);
+  const [leaveRequests, setLeaveRequests] = useState([]);
+
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(t);
@@ -42,15 +48,18 @@ export default function App() {
     if (!SUPABASE_CONFIGURED) { setLoading(false); return; }
     (async () => {
       try {
-        let emps = await loadEmployees();
+        const emps = await loadEmployees();
         const att = await loadAttendance();
-        if (emps.length === 0) { emps = SEED_EMPLOYEES; await saveEmployees(emps, []); }
         const accts = await loadAccounts();
         const byEmp = {};
         accts.forEach(a => { if (a.employeeId) byEmp[a.employeeId] = a; });
+        const types = await loadLeaveTypes();
+        const requests = await loadLeaveRequests();
         setEmployees(emps);
         setAttendance(att);
         setAccountsByEmp(byEmp);
+        setLeaveTypes(types);
+        setLeaveRequests(requests);
       } catch (e) {
         setLoadError(e.message);
       }
@@ -63,6 +72,53 @@ export default function App() {
     const byEmp = {};
     accts.forEach(a => { if (a.employeeId) byEmp[a.employeeId] = a; });
     setAccountsByEmp(byEmp);
+  }, []);
+
+  const refreshLeaveRequests = useCallback(async () => {
+    setLeaveRequests(await loadLeaveRequests());
+  }, []);
+
+  const submitLeaveRequest = useCallback(async ({ employeeId, leaveTypeId, leaveTypeName, startDate, endDate, reason }) => {
+    const emp = employees.find(e => e.id === employeeId);
+    await createLeaveRequest({ employeeId, leaveTypeId, leaveTypeName, startDate, endDate, reason });
+    await refreshLeaveRequests();
+    notifyHR({
+      subject: `RankViz — Leave request from ${emp?.name || "an employee"}`,
+      lines: [
+        `Employee: ${emp?.name}`,
+        `Leave type: ${leaveTypeName}`,
+        `From: ${startDate}  To: ${endDate}`,
+        reason ? `Reason: ${reason}` : null,
+      ].filter(Boolean),
+    });
+  }, [employees, refreshLeaveRequests]);
+
+  const decideLeave = useCallback(async (request, status) => {
+    await decideLeaveRequest(request.id, status, session?.name || session?.username);
+    if (status === "approved") {
+      // Mark each day in the range as a leave day in attendance.
+      let d = new Date(request.startDate);
+      const end = new Date(request.endDate);
+      while (d <= end) {
+        const dateStr = todayStr(d);
+        const key = recKey(request.employeeId, dateStr);
+        const existing = attendance[key] || {};
+        const rec = { ...existing, type: "leave", leaveReason: request.leaveTypeName };
+        setAttendance(prev => ({ ...prev, [key]: rec }));
+        await saveAttendanceRecord(request.employeeId, dateStr, rec, "web");
+        d.setDate(d.getDate() + 1);
+      }
+    }
+    await refreshLeaveRequests();
+  }, [attendance, refreshLeaveRequests, session]);
+
+  const addLeaveType = useCallback(async (name) => {
+    await createLeaveType(name);
+    setLeaveTypes(await loadLeaveTypes());
+  }, []);
+  const removeLeaveType = useCallback(async (id) => {
+    await deleteLeaveType(id);
+    setLeaveTypes(await loadLeaveTypes());
   }, []);
 
   const persistEmployees = useCallback(async (next) => {
@@ -154,6 +210,9 @@ export default function App() {
         punch={punchWithNotify}
         now={now}
         onLogout={handleLogout}
+        leaveTypes={leaveTypes}
+        leaveRequests={leaveRequests.filter(r => r.employeeId === emp.id)}
+        onApplyLeave={submitLeaveRequest}
       />
     );
   }
@@ -168,6 +227,16 @@ export default function App() {
         )}
         {tab === "reports" && <ReportsView employees={employees} attendance={attendance} now={now} />}
         {tab === "monthly" && <MonthlyReportView employees={employees} attendance={attendance} now={now} />}
+        {tab === "leaveApprovals" && (
+          <LeaveApprovalsView
+            employees={employees}
+            leaveTypes={leaveTypes}
+            leaveRequests={leaveRequests}
+            onDecide={decideLeave}
+            onAddType={addLeaveType}
+            onRemoveType={removeLeaveType}
+          />
+        )}
       </Shell>
     </div>
   );

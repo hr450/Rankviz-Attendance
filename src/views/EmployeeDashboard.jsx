@@ -1,13 +1,14 @@
 import React, { useState } from "react";
-import { LogIn, LogOut, Home, Coffee, HelpCircle, LogOut as SignOut, Repeat, MapPin, X, Check } from "lucide-react";
+import { LogIn, LogOut, Home, Coffee, HelpCircle, LogOut as SignOut, Repeat, MapPin, X, Check, CalendarPlus, Clock } from "lucide-react";
 import { COLORS } from "../lib/constants";
 import { computeStatus, fmtTime, fmtHrs, todayStr } from "../lib/utils";
 import { StatusPill, LogoMark, Field, inputStyle, secondaryBtn } from "../components/ui";
 import HelpModal from "../components/HelpModal";
 
-export default function EmployeeDashboard({ employee, attendance, punch, now, onLogout }) {
+export default function EmployeeDashboard({ employee, attendance, punch, now, onLogout, leaveTypes = [], leaveRequests = [], onApplyLeave }) {
   const [showHelp, setShowHelp] = useState(false);
   const [wfhModal, setWfhModal] = useState(null); // 'in' | 'out' | null
+  const [leaveModal, setLeaveModal] = useState(false);
 
   const date = todayStr(now);
   const rec = attendance[`${employee.id}|${date}`];
@@ -65,18 +66,30 @@ export default function EmployeeDashboard({ employee, attendance, punch, now, on
         </div>
 
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-          <button onClick={() => punch(employee.id, "leave")} style={{ ...secondaryBtn, flex: "unset", display: "inline-flex", alignItems: "center", gap: 7 }}>
-            <Coffee size={16} /> Mark leave today
+          <button onClick={() => setLeaveModal(true)} style={{ ...secondaryBtn, flex: "unset", display: "inline-flex", alignItems: "center", gap: 7 }}>
+            <CalendarPlus size={16} /> Apply for leave
           </button>
           <button onClick={() => punch(employee.id, "alternate")} style={{ ...secondaryBtn, flex: "unset", display: "inline-flex", alignItems: "center", gap: 7 }}>
             <Repeat size={16} /> Mark as alternate day
           </button>
         </div>
 
+        <MyLeaveRequests leaveRequests={leaveRequests} />
+
         <RecentActivity employee={employee} attendance={attendance} now={now} />
       </div>
 
       {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
+      {leaveModal && (
+        <LeaveApplicationModal
+          leaveTypes={leaveTypes}
+          onClose={() => setLeaveModal(false)}
+          onSubmit={async (payload) => {
+            await onApplyLeave({ employeeId: employee.id, ...payload });
+            setLeaveModal(false);
+          }}
+        />
+      )}
       {wfhModal && (
         <WfhFormModal
           mode={wfhModal}
@@ -163,6 +176,139 @@ function RecentActivity({ employee, attendance, now }) {
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+const LEAVE_STATUS_STYLE = {
+  pending: { bg: "#FBF0DC", fg: "#D99A2B", label: "Pending" },
+  approved: { bg: "#E7F6EF", fg: "#2F9E6E", label: "Approved" },
+  rejected: { bg: "#FBE8E7", fg: "#D9534F", label: "Rejected" },
+};
+
+function MyLeaveRequests({ leaveRequests }) {
+  if (!leaveRequests || leaveRequests.length === 0) return null;
+  return (
+    <div style={{ marginTop: 26 }}>
+      <div style={{ fontWeight: 800, fontSize: 14.5, marginBottom: 10, display: "flex", alignItems: "center", gap: 7 }}>
+        <Clock size={15} color={COLORS.amber} /> My leave requests
+      </div>
+      <div className="rv-card" style={{ padding: "6px 4px" }}>
+        {leaveRequests.map(r => {
+          const s = LEAVE_STATUS_STYLE[r.status] || LEAVE_STATUS_STYLE.pending;
+          return (
+            <div key={r.id} style={{
+              display: "flex", justifyContent: "space-between", alignItems: "center",
+              padding: "11px 16px", borderBottom: `1px solid ${COLORS.line}`, gap: 10, flexWrap: "wrap",
+            }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 13.5 }}>{r.leaveTypeName}</div>
+                <div style={{ fontSize: 12, color: COLORS.muted }}>
+                  {new Date(r.startDate + "T00:00:00").toLocaleDateString([], { month: "short", day: "numeric" })}
+                  {" – "}
+                  {new Date(r.endDate + "T00:00:00").toLocaleDateString([], { month: "short", day: "numeric" })}
+                </div>
+              </div>
+              <span style={{
+                display: "inline-flex", alignItems: "center", gap: 6, background: s.bg, color: s.fg,
+                fontWeight: 700, fontSize: 12.5, padding: "4px 10px", borderRadius: 999,
+              }}>{s.label}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function LeaveApplicationModal({ leaveTypes, onClose, onSubmit }) {
+  const [leaveTypeId, setLeaveTypeId] = useState(leaveTypes[0]?.id || "");
+  const [startDate, setStartDate] = useState(todayStr());
+  const [endDate, setEndDate] = useState(todayStr());
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const submit = async () => {
+    setError("");
+    if (leaveTypes.length > 0 && !leaveTypeId) { setError("Choose a leave type."); return; }
+    if (endDate < startDate) { setError("End date can't be before the start date."); return; }
+    setBusy(true);
+    try {
+      const type = leaveTypes.find(t => t.id === leaveTypeId);
+      await onSubmit({
+        leaveTypeId: type?.id || null,
+        leaveTypeName: type?.name || "Leave",
+        startDate, endDate, reason,
+      });
+    } catch (e) {
+      setError(e.message || "Couldn't submit the request.");
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, background: "rgba(15,27,51,0.5)", display: "flex",
+      alignItems: "center", justifyContent: "center", padding: 16, zIndex: 60,
+    }} className="rv-anim-fadein" onClick={onClose}>
+      <div className="rv-card rv-anim-popin" style={{ width: "100%", maxWidth: 460, padding: 28 }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+            <div style={{ width: 38, height: 38, borderRadius: 10, background: COLORS.bg, color: COLORS.violet, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <CalendarPlus size={18} />
+            </div>
+            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>Apply for leave</h3>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: COLORS.muted }}><X size={20} /></button>
+        </div>
+        <p style={{ color: COLORS.muted, fontSize: 13, margin: "6px 0 20px" }}>
+          This goes to HR for approval — it won't mark your attendance until they approve it.
+        </p>
+
+        {leaveTypes.length === 0 ? (
+          <div style={{ background: "#FBF0DC", color: "#8A5D14", borderRadius: 10, padding: "10px 12px", fontSize: 12.5, fontWeight: 600, marginBottom: 14 }}>
+            HR hasn't set up any leave types yet. You can still submit — they'll follow up.
+          </div>
+        ) : (
+          <Field label="Leave type">
+            <select value={leaveTypeId} onChange={e => setLeaveTypeId(e.target.value)} style={inputStyle}>
+              {leaveTypes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+          </Field>
+        )}
+
+        <div style={{ display: "flex", gap: 12 }}>
+          <Field label="From" style={{ flex: 1 }}>
+            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={inputStyle} />
+          </Field>
+          <Field label="To" style={{ flex: 1 }}>
+            <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={inputStyle} />
+          </Field>
+        </div>
+
+        <Field label="Reason (optional)">
+          <input value={reason} onChange={e => setReason(e.target.value)} style={inputStyle} placeholder="e.g. Family event" />
+        </Field>
+
+        {error && <div style={{ color: COLORS.red, fontSize: 12.5, fontWeight: 600, marginBottom: 10 }}>{error}</div>}
+
+        <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+          <button onClick={onClose} style={secondaryBtn}>Cancel</button>
+          <button
+            onClick={submit}
+            disabled={busy}
+            style={{
+              flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7,
+              background: `linear-gradient(135deg, ${COLORS.blue}, ${COLORS.orange})`, color: "#fff",
+              border: "none", borderRadius: 11, padding: "11px 18px", fontWeight: 700, fontSize: 14, cursor: "pointer",
+              opacity: busy ? 0.7 : 1,
+            }}
+          >
+            <Check size={16} /> {busy ? "Submitting…" : "Submit request"}
+          </button>
+        </div>
       </div>
     </div>
   );

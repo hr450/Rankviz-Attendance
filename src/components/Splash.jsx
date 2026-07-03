@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { COLORS } from "../lib/constants";
 import { LogoMark } from "./ui";
+import bgImage from "../assets/login-background.webp";
 
 /**
  * Shows the RankViz logo pop in, holds briefly, then slides the whole
@@ -18,7 +19,8 @@ export default function Splash({ onDone, subtitle = "Attendance, made visible.",
   return (
     <div style={{
       position: "fixed", inset: 0, zIndex: 100,
-      background: `radial-gradient(circle at 30% 20%, ${COLORS.navy2}, ${COLORS.navy} 65%)`,
+      backgroundImage: `linear-gradient(180deg, rgba(6,12,28,0.55), rgba(6,12,28,0.8)), url(${bgImage})`,
+      backgroundSize: "cover", backgroundPosition: "center",
       display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column",
       animation: phase === "out" ? "rvSlideUpOut .6s cubic-bezier(.6,0,.4,1) forwards" : undefined,
     }}>
