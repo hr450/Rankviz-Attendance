@@ -1,9 +1,45 @@
 import React, { useState } from "react";
-import { LogIn, LogOut, Home, Coffee, HelpCircle, LogOut as SignOut, Repeat, MapPin, X, Check, CalendarPlus, Clock } from "lucide-react";
+import { LogIn, LogOut, Home, Coffee, HelpCircle, LogOut as SignOut, Repeat, MapPin, X, Check, CalendarPlus, Clock, Sun, Moon, CloudSun } from "lucide-react";
 import { COLORS } from "../lib/constants";
 import { computeStatus, fmtTime, fmtHrs, todayStr } from "../lib/utils";
 import { StatusPill, LogoMark, Field, inputStyle, secondaryBtn } from "../components/ui";
 import HelpModal from "../components/HelpModal";
+
+/* Time-of-day icon + tone, used instead of an emoji wave */
+function greetingIcon(hour) {
+  if (hour < 12) return { Icon: Sun, tone: "#D99A2B", bg: "#FBF0DC" };
+  if (hour < 18) return { Icon: CloudSun, tone: "#2F6FED", bg: "#E7EEFF" };
+  return { Icon: Moon, tone: "#5E6B85", bg: "#EDEFF5" };
+}
+
+/* Local styles for the subtle motion on this page only — kept scoped
+   so it doesn't leak into the rest of the app. */
+function DashboardStyles() {
+  return (
+    <style>{`
+      @keyframes rvFadeUp {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      @keyframes rvPulseRing {
+        0% { box-shadow: 0 0 0 0 rgba(47,158,110,0.35); }
+        70% { box-shadow: 0 0 0 9px rgba(47,158,110,0); }
+        100% { box-shadow: 0 0 0 0 rgba(47,158,110,0); }
+      }
+      .rv-stagger { opacity: 0; animation: rvFadeUp .45s ease forwards; }
+      .rv-stagger-1 { animation-delay: .02s; }
+      .rv-stagger-2 { animation-delay: .08s; }
+      .rv-stagger-3 { animation-delay: .14s; }
+      .rv-stagger-4 { animation-delay: .2s; }
+      .rv-greeting-badge.rv-live { animation: rvPulseRing 2.4s ease-in-out infinite; }
+      .rv-cta2 { transition: transform .15s ease, box-shadow .15s ease; }
+      .rv-cta2:not(:disabled):hover { transform: translateY(-3px); }
+      .rv-cta2:not(:disabled):active { transform: translateY(0) scale(0.98); }
+      .rv-row { transition: background .15s ease; }
+      .rv-row:hover { background: #F5F7FC; }
+    `}</style>
+  );
+}
 
 export default function EmployeeDashboard({ employee, attendance, punch, now, onLogout, leaveTypes = [], leaveRequests = [], onApplyLeave }) {
   const [showHelp, setShowHelp] = useState(false);
@@ -23,19 +59,38 @@ export default function EmployeeDashboard({ employee, attendance, punch, now, on
   const canWfhIn = !rec?.checkIn && !rec?.wfhCheckIn;
   const canWfhOut = !!rec?.wfhCheckIn && !rec?.wfhCheckOut;
 
+  const greet = greetingIcon(now.getHours());
+  const isLive = canCheckIn; // pulsing ring only while nothing's been punched yet today
+
   return (
     <div style={{ minHeight: "100vh", background: `linear-gradient(180deg, ${COLORS.bg}, #EAEFFB)` }}>
+      <DashboardStyles />
       <TopBar employee={employee} onHelp={() => setShowHelp(true)} onLogout={onLogout} />
 
       <div style={{ maxWidth: 720, margin: "0 auto", padding: "26px 18px 60px" }}>
-        <h1 style={{ fontSize: 24, fontWeight: 800, margin: "0 0 2px" }}>
-          Hi, {employee.name.split(" ")[0]} 👋
-        </h1>
-        <p style={{ color: COLORS.muted, margin: "0 0 20px", fontSize: 14 }}>
-          {now.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" })}
-        </p>
+        <div className="rv-stagger rv-stagger-1" style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 2 }}>
+          <div
+            className={`rv-greeting-badge${isLive ? " rv-live" : ""}`}
+            style={{
+              width: 40, height: 40, borderRadius: "50%", flexShrink: 0,
+              background: greet.bg, color: greet.tone,
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}
+          >
+            <greet.Icon size={20} />
+          </div>
+          <div>
+            <h1 style={{ fontSize: 24, fontWeight: 800, margin: 0 }}>
+              Hi, {employee.name.split(" ")[0]}
+            </h1>
+            <p style={{ color: COLORS.muted, margin: 0, fontSize: 14 }}>
+              {now.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" })}
+            </p>
+          </div>
+        </div>
+        <div style={{ marginBottom: 20 }} />
 
-        <div key={date} className="rv-card rv-anim-slideupin" style={{ padding: 24, marginBottom: 22 }}>
+        <div key={date} className="rv-card rv-anim-slideupin rv-stagger rv-stagger-2" style={{ padding: 24, marginBottom: 22 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
             <div style={{ fontWeight: 800, fontSize: 15.5 }}>Today's attendance</div>
             <StatusPill {...status} />
@@ -56,7 +111,7 @@ export default function EmployeeDashboard({ employee, attendance, punch, now, on
           )}
         </div>
 
-        <div style={{
+        <div className="rv-stagger rv-stagger-3" style={{
           display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 14, marginBottom: 22,
         }}>
           <CtaButton icon={LogIn} label="Check in" tone="present" disabled={!canCheckIn} onClick={() => punch(employee.id, "in")} />
@@ -65,7 +120,7 @@ export default function EmployeeDashboard({ employee, attendance, punch, now, on
           <CtaButton icon={Home} label="WFH check-out" tone="wfh" disabled={!canWfhOut} onClick={() => setWfhModal("out")} />
         </div>
 
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+        <div className="rv-stagger rv-stagger-4" style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           <button onClick={() => setLeaveModal(true)} style={{ ...secondaryBtn, flex: "unset", display: "inline-flex", alignItems: "center", gap: 7 }}>
             <CalendarPlus size={16} /> Apply for leave
           </button>
@@ -141,7 +196,7 @@ const TONE_BG = {
 };
 function CtaButton({ icon: Icon, label, tone, disabled, onClick }) {
   return (
-    <button className="rv-cta" onClick={onClick} disabled={disabled} style={{
+    <button className="rv-cta rv-cta2" onClick={onClick} disabled={disabled} style={{
       background: disabled ? "#E9ECF6" : TONE_BG[tone],
       color: disabled ? COLORS.muted : "#fff",
       boxShadow: disabled ? "none" : "0 8px 20px -6px rgba(15,27,51,0.35)",
@@ -157,19 +212,28 @@ function RecentActivity({ employee, attendance, now }) {
     const d = new Date(now); d.setDate(d.getDate() - i);
     return todayStr(d);
   });
+  const DOT_COLOR = {
+    present: "#2F9E6E", late: "#D99A2B", wfh: "#2F6FED",
+    absent: "#D9534F", leave: "#8B6BD1", weekend: "#B7BECF", half: "#D99A2B",
+  };
+
   return (
-    <div style={{ marginTop: 26 }}>
+    <div className="rv-stagger rv-stagger-4" style={{ marginTop: 26 }}>
       <div style={{ fontWeight: 800, fontSize: 14.5, marginBottom: 10 }}>Recent activity</div>
       <div className="rv-card" style={{ padding: "6px 4px" }}>
         {days.map(date => {
           const rec = attendance[`${employee.id}|${date}`];
           const status = computeStatus(employee, rec, date < todayStr(now), now.getHours() * 60 + now.getMinutes());
           return (
-            <div key={date} style={{
+            <div key={date} className="rv-row" style={{
               display: "flex", justifyContent: "space-between", alignItems: "center",
-              padding: "11px 16px", borderBottom: `1px solid ${COLORS.line}`,
+              padding: "11px 16px", borderBottom: `1px solid ${COLORS.line}`, borderRadius: 8,
             }}>
-              <span style={{ fontSize: 13, color: COLORS.muted, fontWeight: 600 }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 9, fontSize: 13, color: COLORS.muted, fontWeight: 600 }}>
+                <span style={{
+                  width: 7, height: 7, borderRadius: "50%", flexShrink: 0,
+                  background: DOT_COLOR[status?.tone] || COLORS.muted,
+                }} />
                 {new Date(date + "T00:00:00").toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}
               </span>
               <StatusPill {...status} />
