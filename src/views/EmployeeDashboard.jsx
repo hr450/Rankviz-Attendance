@@ -183,11 +183,26 @@ export default function EmployeeDashboard({ employee, attendance, punch, now, on
 
             {tab === "alternate" && (
               <>
-                <div className="rv-stagger rv-stagger-2" style={{ marginBottom: 22 }}>
+                <div className="rv-stagger rv-stagger-2" style={{ marginBottom: 18 }}>
                   <button onClick={() => punch(employee.id, "alternate")} style={{ ...secondaryBtn, flex: "unset", display: "inline-flex", alignItems: "center", gap: 7 }}>
-                    <Repeat size={16} /> Mark today as alternate day
+                    <Repeat size={16} /> {rec?.alternateDay ? "Unmark alternate day" : "Mark today as alternate day"}
                   </button>
+                  {rec?.alternateDay && (
+                    <span style={{ marginLeft: 10, display: "inline-flex", alignItems: "center", gap: 6, background: "#EEE9FC", color: COLORS.violet, fontWeight: 700, fontSize: 12.5, padding: "5px 11px", borderRadius: 999 }}>
+                      Today is marked
+                    </span>
+                  )}
                 </div>
+
+                <div className="rv-stagger rv-stagger-3" style={{
+                  display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 14, marginBottom: 22,
+                }}>
+                  <CtaButton icon={LogIn} label="Check in" tone="present" disabled={!canCheckIn} onClick={() => punch(employee.id, "in")} />
+                  <CtaButton icon={LogOut} label="Check out" tone="late" disabled={!canCheckOut} onClick={() => punch(employee.id, "out")} />
+                  <CtaButton icon={Home} label="WFH check-in" tone="wfh" disabled={!canWfhIn} onClick={() => setWfhModal("in")} />
+                  <CtaButton icon={Home} label="WFH check-out" tone="wfh" disabled={!canWfhOut} onClick={() => setWfhModal("out")} />
+                </div>
+
                 <AlternateDayLog employee={employee} attendance={attendance} />
               </>
             )}
