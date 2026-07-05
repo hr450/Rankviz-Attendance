@@ -197,7 +197,7 @@ export default function App() {
   if (stage === "entering") {
     return (
       <Splash
-        holdMs={900}
+        holdMs={150}
         subtitle={session.role === "admin" ? `Welcome back, ${session.name?.split(" ")[0] || "there"}` : `Hi, ${session.name?.split(" ")[0] || "there"} — have a great day`}
         onDone={() => setStage("app")}
       />
