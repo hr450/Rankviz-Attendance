@@ -49,7 +49,7 @@ export default function ReportsView({ employees, attendance, now }) {
     acc.attended += s.present + s.half + s.wfh;
     return acc;
   }, { present: 0, absent: 0, leave: 0, marked: 0, attended: 0 });
-  const teamAvgAttendance = teamTotals.marked ? Math.round((teamTotals.attended / teamTotals.marked) * 100) : 0;
+  const teamAvgAttendance = teamTotals.marked > 0 ? Math.round((teamTotals.attended / teamTotals.marked) * 100) : 0;
 
   const visibleSummary = useMemo(() => {
     let list = summary.filter(s => s.emp.name.toLowerCase().includes(search.trim().toLowerCase()));
@@ -104,30 +104,37 @@ export default function ReportsView({ employees, attendance, now }) {
       </div>
 
       <div className="rv-card rv-anim-popin" style={{ padding: 20, marginBottom: 20 }}>
-        <h3 style={{ margin: "0 0 14px", fontSize: 15.5, fontWeight: 700 }}>Attendance breakdown</h3>
-        {hasChartData ? (
-          <div style={{ width: "100%", height: 280 }}>
-            <ResponsiveContainer>
-              <BarChart data={chartData} barCategoryGap={18}>
-                <CartesianGrid strokeDasharray="3 3" stroke={COLORS.line} vertical={false} />
-                <XAxis dataKey="name" tick={{ fontSize: 12 }} axisLine={{ stroke: COLORS.line }} tickLine={false} />
-                <YAxis tick={{ fontSize: 12 }} allowDecimals={false} axisLine={false} tickLine={false} />
-                <Tooltip content={<ReportTooltip />} cursor={{ fill: COLORS.bg }} />
-                <Legend wrapperStyle={{ fontSize: 12.5 }} />
-                <Bar dataKey="Present" stackId="a" fill={COLORS.green} animationEasing="ease-out" animationBegin={0} />
-                <Bar dataKey="Late" stackId="a" fill={COLORS.amber} animationEasing="ease-out" animationBegin={60} />
-                <Bar dataKey="Half Day" stackId="a" fill="#E8B94A" animationEasing="ease-out" animationBegin={120} />
-                <Bar dataKey="WFH" stackId="a" fill={COLORS.blue} animationEasing="ease-out" animationBegin={180} />
-                <Bar dataKey="Leave" stackId="a" fill="#3E5A9E" animationEasing="ease-out" animationBegin={240} />
-                <Bar dataKey="Absent" stackId="a" fill={COLORS.red} radius={[4, 4, 0, 0]} animationEasing="ease-out" animationBegin={300} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        ) : (
-          <div style={{ padding: "40px 0", textAlign: "center", color: COLORS.muted, fontSize: 13.5 }}>
-            No attendance recorded yet for {new Date(ym + "-01").toLocaleDateString([], { month: "long" })}.
-          </div>
-        )}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
+          <h3 style={{ margin: 0, fontSize: 15.5, fontWeight: 700 }}>Attendance breakdown</h3>
+          {!hasChartData && (
+            <span style={{ fontSize: 12, color: COLORS.muted }}>
+              No punches recorded yet for {new Date(ym + "-01").toLocaleDateString([], { month: "long" })}
+            </span>
+          )}
+        </div>
+        <div style={{ width: "100%", height: 280 }}>
+          <ResponsiveContainer>
+            <BarChart data={chartData} barCategoryGap={18}>
+              <CartesianGrid strokeDasharray="3 3" stroke={COLORS.line} vertical={false} />
+              <XAxis dataKey="name" tick={{ fontSize: 12 }} axisLine={{ stroke: COLORS.line }} tickLine={false} />
+              <YAxis
+                tick={{ fontSize: 12 }}
+                allowDecimals={false}
+                axisLine={false}
+                tickLine={false}
+                domain={hasChartData ? [0, "auto"] : [0, 5]}
+              />
+              <Tooltip content={<ReportTooltip />} cursor={{ fill: COLORS.bg }} />
+              <Legend wrapperStyle={{ fontSize: 12.5 }} />
+              <Bar dataKey="Present" stackId="a" fill={COLORS.green} animationEasing="ease-out" animationBegin={0} />
+              <Bar dataKey="Late" stackId="a" fill={COLORS.amber} animationEasing="ease-out" animationBegin={60} />
+              <Bar dataKey="Half Day" stackId="a" fill="#E8B94A" animationEasing="ease-out" animationBegin={120} />
+              <Bar dataKey="WFH" stackId="a" fill={COLORS.blue} animationEasing="ease-out" animationBegin={180} />
+              <Bar dataKey="Leave" stackId="a" fill="#3E5A9E" animationEasing="ease-out" animationBegin={240} />
+              <Bar dataKey="Absent" stackId="a" fill={COLORS.red} radius={[4, 4, 0, 0]} animationEasing="ease-out" animationBegin={300} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
       </div>
 
       <div className="rv-card" style={{ padding: "16px 20px", overflowX: "auto" }}>
