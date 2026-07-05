@@ -38,7 +38,7 @@ function DashboardStyles() {
       .rv-row { transition: background .15s ease; }
       .rv-row:hover { background: #F5F7FC; }
       .rv-sidebar-item { transition: background .15s ease, color .15s ease; }
-      .rv-sidebar-item:hover { background: #EEF1FA !important; }
+      .rv-sidebar-item:not(.rv-active):hover { background: #E7EEFF !important; color: ${COLORS.navy}; }
     `}</style>
   );
 }
@@ -63,14 +63,15 @@ function Sidebar({ tab, setTab }) {
         return (
           <button
             key={it.key}
-            className="rv-sidebar-item"
+            className={`rv-sidebar-item${active ? " rv-active" : ""}`}
             onClick={() => setTab(it.key)}
             style={{
               display: "flex", alignItems: "center", gap: 10, whiteSpace: "nowrap",
               padding: "10px 14px", borderRadius: 10, border: "none", cursor: "pointer",
-              background: active ? "#E7EEFF" : "transparent",
-              color: active ? COLORS.blue : COLORS.muted,
+              background: active ? COLORS.navy : "transparent",
+              color: active ? "#fff" : COLORS.muted,
               fontWeight: active ? 800 : 600, fontSize: 13.5, textAlign: "left",
+              boxShadow: active ? "0 4px 12px -4px rgba(15,27,51,0.4)" : "none",
             }}
           >
             <it.icon size={17} /> {it.label}
