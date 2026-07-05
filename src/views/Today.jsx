@@ -10,7 +10,7 @@ export default function TodayView({ employees, attendance, now, punch }) {
 
   const rows = employees.map(emp => {
     const rec = attendance[`${emp.id}|${date}`];
-    const status = computeStatus(emp, rec, false, nowMinutes);
+    const status = computeStatus(emp, rec, false, nowMinutes, date);
     return { emp, rec, status };
   });
 

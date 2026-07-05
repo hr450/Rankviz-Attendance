@@ -4,6 +4,7 @@ import { TONE_STYLES } from "../lib/utils";
 import logoFull from "../assets/logo-full.png";
 
 export function StatusPill({ label, tone }) {
+  if (tone === "blank") return null;
   const s = TONE_STYLES[tone] || TONE_STYLES.pending;
   return (
     <span style={{
@@ -70,7 +71,7 @@ export const secondaryBtn = {
 export const th = { padding: "9px 12px", fontWeight: 600 };
 export const td = { padding: "12px 12px", fontSize: 14 };
 
-export function LogoMark({ size = 40, showWord = false, dark = true }) {
+export function LogoMark({ size = 40, showWord = true, dark = true }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
       <img

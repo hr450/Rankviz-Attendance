@@ -24,7 +24,7 @@ export default function LogView({ employees, attendance, now }) {
     const isPast = date < todayStr(now);
     empList.forEach(emp => {
       const rec = attendance[`${emp.id}|${date}`];
-      const status = computeStatus(emp, rec, isPast, nowMinutes);
+      const status = computeStatus(emp, rec, isPast, nowMinutes, date);
       let hours = null;
       if (rec?.checkIn && rec?.checkOut) hours = (new Date(rec.checkOut) - new Date(rec.checkIn)) / 3600000;
       rows.push({ date, emp, rec, status, hours });

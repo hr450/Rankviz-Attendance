@@ -25,7 +25,7 @@ export default function ReportsView({ employees, attendance, now }) {
       if (dateStr > todayFull) continue;
       const isPast = dateStr < todayFull;
       const rec = attendance[`${emp.id}|${dateStr}`];
-      const status = computeStatus(emp, rec, isPast, now.getHours() * 60 + now.getMinutes());
+      const status = computeStatus(emp, rec, isPast, now.getHours() * 60 + now.getMinutes(), dateStr);
       if (status.tone === "present") present++;
       else if (status.tone === "late") { present++; late++; }
       else if (status.tone === "half") { half++; }

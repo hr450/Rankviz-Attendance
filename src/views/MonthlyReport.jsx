@@ -26,7 +26,7 @@ export default function MonthlyReportView({ employees, attendance, now }) {
       if (dateStr > todayFull) continue;
       const isPast = dateStr < todayFull;
       const rec = attendance[`${emp.id}|${dateStr}`];
-      const status = computeStatus(emp, rec, isPast, nowMinutes);
+      const status = computeStatus(emp, rec, isPast, nowMinutes, dateStr);
       list.push({ date: dateStr, rec, status });
     }
     return list.reverse();
