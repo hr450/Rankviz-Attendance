@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { LogIn, LogOut, Home, Coffee, HelpCircle, LogOut as SignOut, Repeat, MapPin, X, Check, CalendarPlus, Clock, Sun, Moon, CloudSun } from "lucide-react";
+import { LogIn, LogOut, Home, Coffee, HelpCircle, LogOut as SignOut, Repeat, MapPin, X, Check, CalendarPlus, Clock, Sun, Moon, CloudSun, ListChecks } from "lucide-react";
 import { COLORS } from "../lib/constants";
 import { computeStatus, fmtTime, fmtHrs, todayStr } from "../lib/utils";
 import { StatusPill, LogoMark, Field, inputStyle, secondaryBtn } from "../components/ui";
@@ -37,7 +37,47 @@ function DashboardStyles() {
       .rv-cta2:not(:disabled):active { transform: translateY(0) scale(0.98); }
       .rv-row { transition: background .15s ease; }
       .rv-row:hover { background: #F5F7FC; }
+      .rv-sidebar-item { transition: background .15s ease, color .15s ease; }
+      .rv-sidebar-item:hover { background: #EEF1FA !important; }
     `}</style>
+  );
+}
+
+const SIDEBAR_ITEMS = [
+  { key: "attendance", label: "Attendance", icon: ListChecks },
+  { key: "leaves", label: "Leaves", icon: CalendarPlus },
+  { key: "alternate", label: "Alternate days", icon: Repeat },
+];
+
+function Sidebar({ tab, setTab }) {
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 720;
+  return (
+    <div style={{
+      display: "flex", flexDirection: isMobile ? "row" : "column", gap: 6,
+      width: isMobile ? "100%" : 200, flexShrink: 0,
+      marginBottom: isMobile ? 18 : 0, marginRight: isMobile ? 0 : 24,
+      overflowX: isMobile ? "auto" : "visible",
+    }}>
+      {SIDEBAR_ITEMS.map(it => {
+        const active = tab === it.key;
+        return (
+          <button
+            key={it.key}
+            className="rv-sidebar-item"
+            onClick={() => setTab(it.key)}
+            style={{
+              display: "flex", alignItems: "center", gap: 10, whiteSpace: "nowrap",
+              padding: "10px 14px", borderRadius: 10, border: "none", cursor: "pointer",
+              background: active ? "#E7EEFF" : "transparent",
+              color: active ? COLORS.blue : COLORS.muted,
+              fontWeight: active ? 800 : 600, fontSize: 13.5, textAlign: "left",
+            }}
+          >
+            <it.icon size={17} /> {it.label}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -45,6 +85,7 @@ export default function EmployeeDashboard({ employee, attendance, punch, now, on
   const [showHelp, setShowHelp] = useState(false);
   const [wfhModal, setWfhModal] = useState(null); // 'in' | 'out' | null
   const [leaveModal, setLeaveModal] = useState(false);
+  const [tab, setTab] = useState("attendance"); // 'attendance' | 'leaves' | 'alternate'
 
   const date = todayStr(now);
   const rec = attendance[`${employee.id}|${date}`];
@@ -67,8 +108,8 @@ export default function EmployeeDashboard({ employee, attendance, punch, now, on
       <DashboardStyles />
       <TopBar employee={employee} onHelp={() => setShowHelp(true)} onLogout={onLogout} />
 
-      <div style={{ maxWidth: 720, margin: "0 auto", padding: "26px 18px 60px" }}>
-        <div className="rv-stagger rv-stagger-1" style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 2 }}>
+      <div style={{ maxWidth: 960, margin: "0 auto", padding: "26px 18px 60px" }}>
+        <div className="rv-stagger rv-stagger-1" style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
           <div
             className={`rv-greeting-badge${isLive ? " rv-live" : ""}`}
             style={{
@@ -88,50 +129,70 @@ export default function EmployeeDashboard({ employee, attendance, punch, now, on
             </p>
           </div>
         </div>
-        <div style={{ marginBottom: 20 }} />
 
-        <div key={date} className="rv-card rv-anim-slideupin rv-stagger rv-stagger-2" style={{ padding: 24, marginBottom: 22 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-            <div style={{ fontWeight: 800, fontSize: 15.5 }}>Today's attendance</div>
-            <StatusPill {...status} />
+        <div style={{ display: "flex", flexDirection: typeof window !== "undefined" && window.innerWidth < 720 ? "column" : "row" }}>
+          <Sidebar tab={tab} setTab={setTab} />
+
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {tab === "attendance" && (
+              <>
+                <div key={date} className="rv-card rv-anim-slideupin rv-stagger rv-stagger-2" style={{ padding: 24, marginBottom: 22 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                    <div style={{ fontWeight: 800, fontSize: 15.5 }}>Today's attendance</div>
+                    <StatusPill {...status} />
+                  </div>
+
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 22, marginBottom: 4 }}>
+                    <TimeStat label="Check-in" value={fmtTime(rec?.checkIn)} />
+                    <TimeStat label="Check-out" value={rec?.checkIn && !rec?.checkOut ? "No checkout" : fmtTime(rec?.checkOut)} alert={rec?.checkIn && !rec?.checkOut} />
+                    <TimeStat label="WFH in" value={fmtTime(rec?.wfhCheckIn)} />
+                    <TimeStat label="WFH out" value={rec?.wfhCheckIn && !rec?.wfhCheckOut ? "No checkout" : fmtTime(rec?.wfhCheckOut)} alert={rec?.wfhCheckIn && !rec?.wfhCheckOut} />
+                    {hours != null && <TimeStat label="Hours logged" value={fmtHrs(hours)} />}
+                  </div>
+
+                  {rec?.alternateDay && (
+                    <div style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 14, background: "#EEE9FC", color: COLORS.violet, fontWeight: 700, fontSize: 12.5, padding: "5px 11px", borderRadius: 999 }}>
+                      <Repeat size={12} /> Marked as an alternate day
+                    </div>
+                  )}
+                </div>
+
+                <div className="rv-stagger rv-stagger-3" style={{
+                  display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 14, marginBottom: 22,
+                }}>
+                  <CtaButton icon={LogIn} label="Check in" tone="present" disabled={!canCheckIn} onClick={() => punch(employee.id, "in")} />
+                  <CtaButton icon={LogOut} label="Check out" tone="late" disabled={!canCheckOut} onClick={() => punch(employee.id, "out")} />
+                  <CtaButton icon={Home} label="WFH check-in" tone="wfh" disabled={!canWfhIn} onClick={() => setWfhModal("in")} />
+                  <CtaButton icon={Home} label="WFH check-out" tone="wfh" disabled={!canWfhOut} onClick={() => setWfhModal("out")} />
+                </div>
+
+                <RecentActivity employee={employee} attendance={attendance} now={now} />
+              </>
+            )}
+
+            {tab === "leaves" && (
+              <>
+                <div className="rv-stagger rv-stagger-2" style={{ marginBottom: 22 }}>
+                  <button onClick={() => setLeaveModal(true)} style={{ ...secondaryBtn, flex: "unset", display: "inline-flex", alignItems: "center", gap: 7 }}>
+                    <CalendarPlus size={16} /> Apply for leave
+                  </button>
+                </div>
+                <MyLeaveRequestsFull leaveRequests={leaveRequests} />
+              </>
+            )}
+
+            {tab === "alternate" && (
+              <>
+                <div className="rv-stagger rv-stagger-2" style={{ marginBottom: 22 }}>
+                  <button onClick={() => punch(employee.id, "alternate")} style={{ ...secondaryBtn, flex: "unset", display: "inline-flex", alignItems: "center", gap: 7 }}>
+                    <Repeat size={16} /> Mark today as alternate day
+                  </button>
+                </div>
+                <AlternateDayLog employee={employee} attendance={attendance} />
+              </>
+            )}
           </div>
-
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 22, marginBottom: 4 }}>
-            <TimeStat label="Check-in" value={fmtTime(rec?.checkIn)} />
-            <TimeStat label="Check-out" value={rec?.checkIn && !rec?.checkOut ? "No checkout" : fmtTime(rec?.checkOut)} alert={rec?.checkIn && !rec?.checkOut} />
-            <TimeStat label="WFH in" value={fmtTime(rec?.wfhCheckIn)} />
-            <TimeStat label="WFH out" value={rec?.wfhCheckIn && !rec?.wfhCheckOut ? "No checkout" : fmtTime(rec?.wfhCheckOut)} alert={rec?.wfhCheckIn && !rec?.wfhCheckOut} />
-            {hours != null && <TimeStat label="Hours logged" value={fmtHrs(hours)} />}
-          </div>
-
-          {rec?.alternateDay && (
-            <div style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 14, background: "#EEE9FC", color: COLORS.violet, fontWeight: 700, fontSize: 12.5, padding: "5px 11px", borderRadius: 999 }}>
-              <Repeat size={12} /> Marked as an alternate day
-            </div>
-          )}
         </div>
-
-        <div className="rv-stagger rv-stagger-3" style={{
-          display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 14, marginBottom: 22,
-        }}>
-          <CtaButton icon={LogIn} label="Check in" tone="present" disabled={!canCheckIn} onClick={() => punch(employee.id, "in")} />
-          <CtaButton icon={LogOut} label="Check out" tone="late" disabled={!canCheckOut} onClick={() => punch(employee.id, "out")} />
-          <CtaButton icon={Home} label="WFH check-in" tone="wfh" disabled={!canWfhIn} onClick={() => setWfhModal("in")} />
-          <CtaButton icon={Home} label="WFH check-out" tone="wfh" disabled={!canWfhOut} onClick={() => setWfhModal("out")} />
-        </div>
-
-        <div className="rv-stagger rv-stagger-4" style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-          <button onClick={() => setLeaveModal(true)} style={{ ...secondaryBtn, flex: "unset", display: "inline-flex", alignItems: "center", gap: 7 }}>
-            <CalendarPlus size={16} /> Apply for leave
-          </button>
-          <button onClick={() => punch(employee.id, "alternate")} style={{ ...secondaryBtn, flex: "unset", display: "inline-flex", alignItems: "center", gap: 7 }}>
-            <Repeat size={16} /> Mark as alternate day
-          </button>
-        </div>
-
-        <MyLeaveRequests leaveRequests={leaveRequests} />
-
-        <RecentActivity employee={employee} attendance={attendance} now={now} />
       </div>
 
       {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
@@ -251,37 +312,92 @@ const LEAVE_STATUS_STYLE = {
   rejected: { bg: "#FBE8E7", fg: "#D9534F", label: "Rejected" },
 };
 
-function MyLeaveRequests({ leaveRequests }) {
-  if (!leaveRequests || leaveRequests.length === 0) return null;
+function MyLeaveRequestsFull({ leaveRequests }) {
   return (
-    <div style={{ marginTop: 26 }}>
+    <div>
       <div style={{ fontWeight: 800, fontSize: 14.5, marginBottom: 10, display: "flex", alignItems: "center", gap: 7 }}>
         <Clock size={15} color={COLORS.amber} /> My leave requests
       </div>
-      <div className="rv-card" style={{ padding: "6px 4px" }}>
-        {leaveRequests.map(r => {
-          const s = LEAVE_STATUS_STYLE[r.status] || LEAVE_STATUS_STYLE.pending;
-          return (
-            <div key={r.id} style={{
-              display: "flex", justifyContent: "space-between", alignItems: "center",
-              padding: "11px 16px", borderBottom: `1px solid ${COLORS.line}`, gap: 10, flexWrap: "wrap",
-            }}>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 13.5 }}>{r.leaveTypeName}</div>
-                <div style={{ fontSize: 12, color: COLORS.muted }}>
-                  {new Date(r.startDate + "T00:00:00").toLocaleDateString([], { month: "short", day: "numeric" })}
-                  {" – "}
-                  {new Date(r.endDate + "T00:00:00").toLocaleDateString([], { month: "short", day: "numeric" })}
+      {(!leaveRequests || leaveRequests.length === 0) ? (
+        <div className="rv-card" style={{ padding: "28px 20px", textAlign: "center", color: COLORS.muted, fontSize: 13.5 }}>
+          No leave requests yet — use "Apply for leave" above when you need one.
+        </div>
+      ) : (
+        <div className="rv-card" style={{ padding: "6px 4px" }}>
+          {leaveRequests.map(r => {
+            const s = LEAVE_STATUS_STYLE[r.status] || LEAVE_STATUS_STYLE.pending;
+            return (
+              <div key={r.id} className="rv-row" style={{
+                display: "flex", justifyContent: "space-between", alignItems: "center",
+                padding: "11px 16px", borderBottom: `1px solid ${COLORS.line}`, gap: 10, flexWrap: "wrap", borderRadius: 8,
+              }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 13.5 }}>{r.leaveTypeName}</div>
+                  <div style={{ fontSize: 12, color: COLORS.muted }}>
+                    {new Date(r.startDate + "T00:00:00").toLocaleDateString([], { month: "short", day: "numeric" })}
+                    {" – "}
+                    {new Date(r.endDate + "T00:00:00").toLocaleDateString([], { month: "short", day: "numeric" })}
+                  </div>
+                </div>
+                <span style={{
+                  display: "inline-flex", alignItems: "center", gap: 6, background: s.bg, color: s.fg,
+                  fontWeight: 700, fontSize: 12.5, padding: "4px 10px", borderRadius: 999,
+                }}>{s.label}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* Alternate-day tab: every day this employee marked as an alternate working
+   day, with whatever check-in/check-out (regular or WFH) was logged for it. */
+function AlternateDayLog({ employee, attendance }) {
+  const entries = Object.entries(attendance || {})
+    .filter(([key, rec]) => key.startsWith(`${employee.id}|`) && rec?.alternateDay)
+    .map(([key, rec]) => ({ date: key.split("|")[1], rec }))
+    .sort((a, b) => (a.date < b.date ? 1 : -1));
+
+  return (
+    <div>
+      <div style={{ fontWeight: 800, fontSize: 14.5, marginBottom: 10 }}>Alternate day record</div>
+      {entries.length === 0 ? (
+        <div className="rv-card" style={{ padding: "28px 20px", textAlign: "center", color: COLORS.muted, fontSize: 13.5 }}>
+          No alternate days marked yet.
+        </div>
+      ) : (
+        <div className="rv-card" style={{ padding: "6px 4px" }}>
+          {entries.map(({ date, rec }) => {
+            const checkIn = rec.checkIn || rec.wfhCheckIn;
+            const checkOut = rec.checkOut || rec.wfhCheckOut;
+            const isWfh = !!rec.wfhCheckIn;
+            const hrs = (checkIn && checkOut) ? (new Date(checkOut) - new Date(checkIn)) / 3600000 : null;
+            return (
+              <div key={date} className="rv-row" style={{
+                display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8,
+                padding: "11px 16px", borderBottom: `1px solid ${COLORS.line}`, borderRadius: 8,
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: COLORS.violet, flexShrink: 0 }} />
+                  <span style={{ fontSize: 13, fontWeight: 700 }}>
+                    {new Date(date + "T00:00:00").toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}
+                  </span>
+                  {isWfh && (
+                    <span style={{ fontSize: 11, color: COLORS.blue, fontWeight: 700, background: "#E7EEFF", padding: "2px 8px", borderRadius: 999 }}>WFH</span>
+                  )}
+                </div>
+                <div style={{ display: "flex", gap: 16, fontSize: 12.5, color: COLORS.muted }}>
+                  <span>In: <strong style={{ color: COLORS.ink }}>{fmtTime(checkIn) || "—"}</strong></span>
+                  <span>Out: <strong style={{ color: COLORS.ink }}>{fmtTime(checkOut) || "—"}</strong></span>
+                  {hrs != null && <span>Hours: <strong style={{ color: COLORS.ink }}>{fmtHrs(hrs)}</strong></span>}
                 </div>
               </div>
-              <span style={{
-                display: "inline-flex", alignItems: "center", gap: 6, background: s.bg, color: s.fg,
-                fontWeight: 700, fontSize: 12.5, padding: "4px 10px", borderRadius: 999,
-              }}>{s.label}</span>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
