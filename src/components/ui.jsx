@@ -1,13 +1,36 @@
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { COLORS } from "../lib/constants";
 import { TONE_STYLES } from "../lib/utils";
 import logoFull from "../assets/logo-full.png";
+
+/* Animates a number counting up to `value` whenever it changes. */
+function useCountUp(value, duration = 550) {
+  const [display, setDisplay] = useState(value);
+  const prevRef = useRef(value);
+  useEffect(() => {
+    const start = prevRef.current;
+    const change = value - start;
+    if (change === 0) return;
+    const startTime = performance.now();
+    let raf;
+    function tick(now) {
+      const progress = Math.min((now - startTime) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setDisplay(Math.round(start + change * eased));
+      if (progress < 1) raf = requestAnimationFrame(tick);
+      else prevRef.current = value;
+    }
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [value, duration]);
+  return display;
+}
 
 export function StatusPill({ label, tone }) {
   if (tone === "blank") return null;
   const s = TONE_STYLES[tone] || TONE_STYLES.pending;
   return (
-    <span style={{
+    <span className="rv-pill-in" style={{
       display: "inline-flex", alignItems: "center", gap: 6,
       background: s.bg, color: s.fg, fontWeight: 600, fontSize: 12.5,
       padding: "4px 10px", borderRadius: 999, whiteSpace: "nowrap",
@@ -20,11 +43,12 @@ export function StatusPill({ label, tone }) {
 
 export function StatCard({ label, value, tone }) {
   const s = TONE_STYLES[tone] || TONE_STYLES.pending;
+  const display = useCountUp(value);
   return (
-    <div className="rv-card" style={{ padding: "18px 20px" }}>
+    <div className="rv-card rv-stat-card" style={{ padding: "18px 20px", "--rv-accent": s.dot }}>
       <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 6 }}>
         <span style={{ width: 8, height: 8, borderRadius: 99, background: s.dot }} />
-        <span style={{ fontSize: 27, fontWeight: 800 }}>{value}</span>
+        <span style={{ fontSize: 27, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{display}</span>
       </div>
       <div style={{ color: COLORS.muted, fontSize: 13, fontWeight: 600 }}>{label}</div>
     </div>

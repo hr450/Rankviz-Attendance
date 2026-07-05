@@ -26,7 +26,7 @@ export default function MonthlyReportView({ employees, attendance, now }) {
       if (dateStr > todayFull) continue;
       const isPast = dateStr < todayFull;
       const rec = attendance[`${emp.id}|${dateStr}`];
-      const status = computeStatus(emp, rec, isPast, nowMinutes, dateStr);
+      const status = computeStatus(emp, rec, isPast, nowMinutes);
       list.push({ date: dateStr, rec, status });
     }
     return list.reverse();
@@ -82,7 +82,7 @@ export default function MonthlyReportView({ employees, attendance, now }) {
 
       <div className="rv-card" style={{ padding: "16px 20px", overflowX: "auto" }}>
         <h3 style={{ margin: "0 0 12px", fontSize: 15, fontWeight: 700 }}>Full attendance — {emp.name}</h3>
-        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 760 }}>
+        <table className="rv-table-hover" style={{ width: "100%", borderCollapse: "collapse", minWidth: 760 }}>
           <thead>
             <tr style={{ color: COLORS.muted, fontSize: 12.5, textAlign: "left" }}>
               <th style={th}>Date</th><th style={th}>Status</th><th style={th}>Check-in</th>
@@ -90,14 +90,14 @@ export default function MonthlyReportView({ employees, attendance, now }) {
             </tr>
           </thead>
           <tbody>
-            {rows.map(r => {
+            {rows.map((r, i) => {
               const inT = r.rec?.checkIn, outT = r.rec?.checkOut;
               const hours = (inT && outT) ? (new Date(outT) - new Date(inT)) / 3600000
                 : (r.rec?.wfhCheckIn && r.rec?.wfhCheckOut) ? (new Date(r.rec.wfhCheckOut) - new Date(r.rec.wfhCheckIn)) / 3600000
                 : null;
               const missedCheckout = (r.rec?.checkIn && !r.rec?.checkOut) || (r.rec?.wfhCheckIn && !r.rec?.wfhCheckOut);
               return (
-                <tr key={r.date} style={{ borderTop: `1px solid ${COLORS.line}` }}>
+                <tr key={r.date} className="rv-row-in" style={{ borderTop: `1px solid ${COLORS.line}`, animationDelay: `${i * 25}ms` }}>
                   <td style={td}>{new Date(r.date + "T00:00:00").toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}</td>
                   <td style={td}><StatusPill {...r.status} /></td>
                   <td style={{ ...td, color: COLORS.muted }}>{fmtTime(r.rec?.checkIn)}</td>

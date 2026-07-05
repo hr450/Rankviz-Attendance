@@ -24,7 +24,7 @@ export default function LogView({ employees, attendance, now }) {
     const isPast = date < todayStr(now);
     empList.forEach(emp => {
       const rec = attendance[`${emp.id}|${date}`];
-      const status = computeStatus(emp, rec, isPast, nowMinutes, date);
+      const status = computeStatus(emp, rec, isPast, nowMinutes);
       let hours = null;
       if (rec?.checkIn && rec?.checkOut) hours = (new Date(rec.checkOut) - new Date(rec.checkIn)) / 3600000;
       rows.push({ date, emp, rec, status, hours });
@@ -46,7 +46,7 @@ export default function LogView({ employees, attendance, now }) {
       </div>
 
       <div className="rv-card" style={{ padding: "16px 20px", overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}>
+        <table className="rv-table-hover" style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}>
           <thead>
             <tr style={{ color: COLORS.muted, fontSize: 12.5, textAlign: "left" }}>
               <th style={th}>Date</th><th style={th}>Name</th><th style={th}>Status</th>
@@ -55,7 +55,7 @@ export default function LogView({ employees, attendance, now }) {
           </thead>
           <tbody>
             {rows.map((r, i) => (
-              <tr key={i} style={{ borderTop: `1px solid ${COLORS.line}` }}>
+              <tr key={i} className="rv-row-in" style={{ borderTop: `1px solid ${COLORS.line}`, animationDelay: `${i * 30}ms` }}>
                 <td style={td}>{new Date(r.date + "T00:00:00").toLocaleDateString([], { month: "short", day: "numeric" })}</td>
                 <td style={td}><strong>{r.emp.name}</strong></td>
                 <td style={td}><StatusPill {...r.status} /></td>

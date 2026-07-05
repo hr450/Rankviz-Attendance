@@ -25,7 +25,7 @@ export default function ReportsView({ employees, attendance, now }) {
       if (dateStr > todayFull) continue;
       const isPast = dateStr < todayFull;
       const rec = attendance[`${emp.id}|${dateStr}`];
-      const status = computeStatus(emp, rec, isPast, now.getHours() * 60 + now.getMinutes(), dateStr);
+      const status = computeStatus(emp, rec, isPast, now.getHours() * 60 + now.getMinutes());
       if (status.tone === "present") present++;
       else if (status.tone === "late") { present++; late++; }
       else if (status.tone === "half") { half++; }
@@ -79,7 +79,7 @@ export default function ReportsView({ employees, attendance, now }) {
       </div>
 
       <div className="rv-card" style={{ padding: "16px 20px", overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 860 }}>
+        <table className="rv-table-hover" style={{ width: "100%", borderCollapse: "collapse", minWidth: 860 }}>
           <thead>
             <tr style={{ color: COLORS.muted, fontSize: 12.5, textAlign: "left" }}>
               <th style={th}>Name</th><th style={th}>Present</th><th style={th}>Late</th>
@@ -93,8 +93,8 @@ export default function ReportsView({ employees, attendance, now }) {
             </tr>
           </thead>
           <tbody>
-            {summary.map(s => (
-              <tr key={s.emp.id} style={{ borderTop: `1px solid ${COLORS.line}` }}>
+            {summary.map((s, i) => (
+              <tr key={s.emp.id} className="rv-row-in" style={{ borderTop: `1px solid ${COLORS.line}`, animationDelay: `${i * 30}ms` }}>
                 <td style={td}><strong>{s.emp.name}</strong></td>
                 <td style={td}>{s.present}</td>
                 <td style={td}>{s.late}</td>

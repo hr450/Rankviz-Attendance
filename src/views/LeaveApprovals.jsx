@@ -12,7 +12,7 @@ const STATUS_STYLE = {
 function StatusBadge({ status }) {
   const s = STATUS_STYLE[status] || STATUS_STYLE.pending;
   return (
-    <span style={{
+    <span className="rv-pill-in" style={{
       display: "inline-flex", alignItems: "center", gap: 6, background: s.bg, color: s.fg,
       fontWeight: 700, fontSize: 12.5, padding: "4px 10px", borderRadius: 999, whiteSpace: "nowrap",
     }}>{s.label}</span>
@@ -48,7 +48,7 @@ export default function LeaveApprovalsView({ employees, leaveTypes, leaveRequest
         <h3 style={{ margin: "0 0 12px", fontSize: 15.5, fontWeight: 700, display: "flex", alignItems: "center", gap: 7 }}>
           <Clock size={15} color={COLORS.amber} /> Pending requests {pending.length > 0 && `(${pending.length})`}
         </h3>
-        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 780 }}>
+        <table className="rv-table-hover" style={{ width: "100%", borderCollapse: "collapse", minWidth: 780 }}>
           <thead>
             <tr style={{ color: COLORS.muted, fontSize: 12.5, textAlign: "left" }}>
               <th style={th}>Employee</th><th style={th}>Type</th><th style={th}>From</th>
@@ -56,8 +56,8 @@ export default function LeaveApprovalsView({ employees, leaveTypes, leaveRequest
             </tr>
           </thead>
           <tbody>
-            {pending.map(r => (
-              <tr key={r.id} style={{ borderTop: `1px solid ${COLORS.line}` }}>
+            {pending.map((r, i) => (
+              <tr key={r.id} className="rv-row-in" style={{ borderTop: `1px solid ${COLORS.line}`, animationDelay: `${i * 30}ms` }}>
                 <td style={td}><strong>{empName(r.employeeId)}</strong></td>
                 <td style={{ ...td, color: COLORS.muted }}>{r.leaveTypeName}</td>
                 <td style={{ ...td, color: COLORS.muted }}>{fmtDate(r.startDate)}</td>
@@ -82,7 +82,7 @@ export default function LeaveApprovalsView({ employees, leaveTypes, leaveRequest
         <h3 style={{ margin: "0 0 12px", fontSize: 15.5, fontWeight: 700, display: "flex", alignItems: "center", gap: 7 }}>
           <CalendarCheck size={15} color={COLORS.blue} /> Request history
         </h3>
-        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 780 }}>
+        <table className="rv-table-hover" style={{ width: "100%", borderCollapse: "collapse", minWidth: 780 }}>
           <thead>
             <tr style={{ color: COLORS.muted, fontSize: 12.5, textAlign: "left" }}>
               <th style={th}>Employee</th><th style={th}>Type</th><th style={th}>From</th>
@@ -90,8 +90,8 @@ export default function LeaveApprovalsView({ employees, leaveTypes, leaveRequest
             </tr>
           </thead>
           <tbody>
-            {decided.map(r => (
-              <tr key={r.id} style={{ borderTop: `1px solid ${COLORS.line}` }}>
+            {decided.map((r, i) => (
+              <tr key={r.id} className="rv-row-in" style={{ borderTop: `1px solid ${COLORS.line}`, animationDelay: `${i * 30}ms` }}>
                 <td style={td}><strong>{empName(r.employeeId)}</strong></td>
                 <td style={{ ...td, color: COLORS.muted }}>{r.leaveTypeName}</td>
                 <td style={{ ...td, color: COLORS.muted }}>{fmtDate(r.startDate)}</td>

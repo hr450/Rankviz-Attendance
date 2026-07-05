@@ -87,3 +87,69 @@ input:focus, select:focus, textarea:focus {
 .rv-anim-float { animation: rvFloat 3.2s ease-in-out infinite; }
 .rv-anim-slideupin { animation: rvSlideUpIn .55s cubic-bezier(.22,1,.36,1) both; }
 .rv-spin { animation: rvSpin 1s linear infinite; }
+
+/* ---------- nav ---------- */
+.rv-nav-btn {
+  position: relative;
+  transition: background-color .2s ease, color .2s ease, transform .15s ease;
+}
+.rv-nav-btn:hover { background: rgba(255,255,255,0.06); transform: translateX(2px); }
+.rv-nav-btn::before {
+  content: "";
+  position: absolute; left: -16px; top: 50%; height: 0; width: 3px;
+  background: #FF7A3D; border-radius: 0 3px 3px 0;
+  transform: translateY(-50%);
+  transition: height .22s cubic-bezier(.22,1,.36,1);
+}
+.rv-nav-btn--active::before { height: 22px; }
+.rv-nav-icon { transition: transform .2s ease; }
+.rv-nav-btn:hover .rv-nav-icon { transform: scale(1.1); }
+
+/* ---------- save status ---------- */
+.rv-save-dot {
+  width: 6px; height: 6px; border-radius: 99px; background: currentColor; display: inline-block;
+}
+.rv-save-dot--pulsing { animation: rvPulseDot 1.1s ease-in-out infinite; }
+@keyframes rvPulseDot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: .4; transform: scale(0.7); }
+}
+
+/* ---------- stat cards ---------- */
+.rv-stat-card {
+  position: relative;
+  overflow: hidden;
+  transition: transform .22s cubic-bezier(.22,1,.36,1), box-shadow .22s ease;
+}
+.rv-stat-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 4px 10px rgba(15,27,51,0.06), 0 22px 40px -18px rgba(15,27,51,0.18);
+}
+.rv-stat-card::before {
+  content: "";
+  position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: var(--rv-accent, #2F6FED);
+  transform: scaleX(0); transform-origin: left;
+  transition: transform .35s cubic-bezier(.22,1,.36,1);
+}
+.rv-stat-card:hover::before { transform: scaleX(1); }
+
+/* ---------- table rows ---------- */
+@keyframes rvRowIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.rv-row-in { animation: rvRowIn .4s cubic-bezier(.22,1,.36,1) both; }
+.rv-table-hover tbody tr { transition: background-color .15s ease; }
+.rv-table-hover tbody tr:hover { background-color: #F8FAFC; }
+
+/* ---------- status pill ---------- */
+.rv-pill-in { animation: rvPopIn .4s cubic-bezier(.34,1.56,.64,1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .rv-anim-fadein, .rv-anim-popin, .rv-anim-float, .rv-anim-slideupin,
+  .rv-row-in, .rv-pill-in, .rv-stat-card, .rv-nav-btn, .rv-nav-icon, .rv-save-dot--pulsing {
+    animation: none !important;
+    transition: none !important;
+  }
+}

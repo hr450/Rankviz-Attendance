@@ -26,7 +26,7 @@ export default function EmployeesView({ employees, setEmployees, accounts, refre
       </div>
 
       <div className="rv-card" style={{ padding: "16px 20px", overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
+        <table className="rv-table-hover" style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
           <thead>
             <tr style={{ color: COLORS.muted, fontSize: 12.5, textAlign: "left" }}>
               <th style={th}>Name</th><th style={th}>Department</th><th style={th}>Type</th>
@@ -34,10 +34,10 @@ export default function EmployeesView({ employees, setEmployees, accounts, refre
             </tr>
           </thead>
           <tbody>
-            {employees.map(emp => {
+            {employees.map((emp, i) => {
               const acct = accounts?.[emp.id];
               return (
-                <tr key={emp.id} style={{ borderTop: `1px solid ${COLORS.line}` }}>
+                <tr key={emp.id} className="rv-row-in" style={{ borderTop: `1px solid ${COLORS.line}`, animationDelay: `${i * 30}ms` }}>
                   <td style={td}><strong>{emp.name}</strong></td>
                   <td style={{ ...td, color: COLORS.muted }}>{emp.department}</td>
                   <td style={{ ...td, color: COLORS.muted }}>{emp.employmentType}</td>

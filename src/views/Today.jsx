@@ -10,7 +10,7 @@ export default function TodayView({ employees, attendance, now, punch }) {
 
   const rows = employees.map(emp => {
     const rec = attendance[`${emp.id}|${date}`];
-    const status = computeStatus(emp, rec, false, nowMinutes, date);
+    const status = computeStatus(emp, rec, false, nowMinutes);
     return { emp, rec, status };
   });
 
@@ -39,7 +39,7 @@ export default function TodayView({ employees, attendance, now, punch }) {
       <div className="rv-card" style={{ padding: "20px 20px 8px" }}>
         <h3 style={{ margin: "0 0 14px", fontSize: 16.5, fontWeight: 700 }}>Employee status</h3>
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 640 }}>
+          <table className="rv-table-hover" style={{ width: "100%", borderCollapse: "collapse", minWidth: 640 }}>
             <thead>
               <tr style={{ color: COLORS.muted, fontSize: 12.5, textAlign: "left" }}>
                 <th style={th}>Name</th>
@@ -51,8 +51,8 @@ export default function TodayView({ employees, attendance, now, punch }) {
               </tr>
             </thead>
             <tbody>
-              {rows.map(({ emp, rec, status }) => (
-                <tr key={emp.id} style={{ borderTop: `1px solid ${COLORS.line}` }}>
+              {rows.map(({ emp, rec, status }, i) => (
+                <tr key={emp.id} className="rv-row-in" style={{ borderTop: `1px solid ${COLORS.line}`, animationDelay: `${i * 35}ms` }}>
                   <td style={td}><strong>{emp.name}</strong></td>
                   <td style={{ ...td, color: COLORS.muted }}>{emp.department}</td>
                   <td style={td}><StatusPill {...status} /></td>

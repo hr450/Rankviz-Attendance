@@ -71,12 +71,18 @@ function SidebarInner({ tab, setTab, account, onLogout }) {
       </div>
 
       <nav style={{ display: "flex", flexDirection: "column", gap: 3, flex: 1 }}>
-        {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
-          <button key={id} onClick={() => setTab(id)} className="rv-nav-btn" style={{
-            background: tab === id ? "rgba(47,111,237,0.22)" : "transparent",
-            color: tab === id ? "#fff" : "#B9BEDD",
-          }}>
-            <Icon size={17} color={tab === id ? COLORS.orange : "#8F94BB"} />
+        {NAV_ITEMS.map(({ id, label, icon: Icon }, i) => (
+          <button
+            key={id}
+            onClick={() => setTab(id)}
+            className={`rv-nav-btn rv-anim-fadein ${tab === id ? "rv-nav-btn--active" : ""}`}
+            style={{
+              background: tab === id ? "rgba(47,111,237,0.22)" : "transparent",
+              color: tab === id ? "#fff" : "#B9BEDD",
+              animationDelay: `${i * 40}ms`,
+            }}
+          >
+            <Icon size={17} color={tab === id ? COLORS.orange : "#8F94BB"} className="rv-nav-icon" />
             {label}
           </button>
         ))}
@@ -90,17 +96,13 @@ function SidebarInner({ tab, setTab, account, onLogout }) {
 }
 
 function TopBar({ saveState, account }) {
+  const showStatus = saveState === "saving" || saveState === "saved";
+  if (!showStatus) return null;
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22, flexWrap: "wrap", gap: 10 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 800, fontSize: 15, color: COLORS.navy }}>
-        <span style={{
-          width: 8, height: 8, borderRadius: 99,
-          background: `linear-gradient(135deg, ${COLORS.orange}, ${COLORS.violet})`,
-        }} />
-        RankViz
-      </div>
-      <span style={{ fontSize: 12.5, color: COLORS.muted, fontWeight: 600 }}>
-        {saveState === "saving" ? "Saving…" : saveState === "saved" ? "All changes saved" : ""}
+    <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", marginBottom: 22, flexWrap: "wrap", gap: 10 }}>
+      <span className="rv-savestate" style={{ fontSize: 12.5, color: saveState === "saving" ? COLORS.muted : COLORS.green, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 6 }}>
+        <span className={saveState === "saving" ? "rv-save-dot rv-save-dot--pulsing" : "rv-save-dot"} />
+        {saveState === "saving" ? "Saving…" : "All changes saved"}
       </span>
     </div>
   );
