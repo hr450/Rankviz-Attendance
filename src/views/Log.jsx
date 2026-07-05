@@ -24,7 +24,7 @@ export default function LogView({ employees, attendance, now }) {
     const isPast = date < todayStr(now);
     empList.forEach(emp => {
       const rec = attendance[`${emp.id}|${date}`];
-      const status = computeStatus(emp, rec, isPast, nowMinutes);
+      const status = computeStatus(emp, rec, isPast, nowMinutes, date);
       let hours = null;
       if (rec?.checkIn && rec?.checkOut) hours = (new Date(rec.checkOut) - new Date(rec.checkIn)) / 3600000;
       rows.push({ date, emp, rec, status, hours });
@@ -33,7 +33,7 @@ export default function LogView({ employees, attendance, now }) {
 
   return (
     <div className="rv-anim-fadein">
-      <h1 style={{ fontSize: 26, fontWeight: 800, margin: "0 0 18px" }}>Attendance Log</h1>
+      <h1 className="rv-header-in" style={{ fontSize: 26, fontWeight: 800, margin: "0 0 18px" }}>Attendance Log</h1>
 
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 18 }}>
         <select value={empFilter} onChange={e => setEmpFilter(e.target.value)} style={selectStyle}>

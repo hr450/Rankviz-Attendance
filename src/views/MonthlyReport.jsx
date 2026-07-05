@@ -26,7 +26,7 @@ export default function MonthlyReportView({ employees, attendance, now }) {
       if (dateStr > todayFull) continue;
       const isPast = dateStr < todayFull;
       const rec = attendance[`${emp.id}|${dateStr}`];
-      const status = computeStatus(emp, rec, isPast, nowMinutes);
+      const status = computeStatus(emp, rec, isPast, nowMinutes, dateStr);
       list.push({ date: dateStr, rec, status });
     }
     return list.reverse();
@@ -40,7 +40,7 @@ export default function MonthlyReportView({ employees, attendance, now }) {
 
   return (
     <div className="rv-anim-fadein">
-      <h1 style={{ fontSize: 26, fontWeight: 800, margin: "0 0 18px" }}>Monthly Report</h1>
+      <h1 className="rv-header-in" style={{ fontSize: 26, fontWeight: 800, margin: "0 0 18px" }}>Monthly Report</h1>
 
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 20 }}>
         <select value={empId} onChange={e => setEmpId(e.target.value)} style={{ ...selectStyle, minWidth: 220, fontWeight: 700 }}>

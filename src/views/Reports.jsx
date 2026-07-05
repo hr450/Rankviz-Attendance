@@ -25,7 +25,7 @@ export default function ReportsView({ employees, attendance, now }) {
       if (dateStr > todayFull) continue;
       const isPast = dateStr < todayFull;
       const rec = attendance[`${emp.id}|${dateStr}`];
-      const status = computeStatus(emp, rec, isPast, now.getHours() * 60 + now.getMinutes());
+      const status = computeStatus(emp, rec, isPast, now.getHours() * 60 + now.getMinutes(), dateStr);
       if (status.tone === "present") present++;
       else if (status.tone === "late") { present++; late++; }
       else if (status.tone === "half") { half++; }
@@ -47,7 +47,7 @@ export default function ReportsView({ employees, attendance, now }) {
   return (
     <div className="rv-anim-fadein">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18, flexWrap: "wrap", gap: 10 }}>
-        <h1 style={{ fontSize: 26, fontWeight: 800, margin: 0 }}>Monthly Reports</h1>
+        <h1 className="rv-header-in" style={{ fontSize: 26, fontWeight: 800, margin: 0 }}>Monthly Reports</h1>
         <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#fff", borderRadius: 10, padding: "6px 10px", border: `1px solid ${COLORS.line}` }}>
           <button onClick={() => shiftMonth(-1)} style={navBtn}><ChevronLeft size={16} /></button>
           <span style={{ fontWeight: 700, fontSize: 14, minWidth: 130, textAlign: "center" }}>
@@ -57,7 +57,7 @@ export default function ReportsView({ employees, attendance, now }) {
         </div>
       </div>
 
-      <div className="rv-card" style={{ padding: 20, marginBottom: 20 }}>
+      <div className="rv-card rv-anim-popin" style={{ padding: 20, marginBottom: 20 }}>
         <h3 style={{ margin: "0 0 14px", fontSize: 15.5, fontWeight: 700 }}>Attendance breakdown</h3>
         <div style={{ width: "100%", height: 280 }}>
           <ResponsiveContainer>
@@ -67,12 +67,12 @@ export default function ReportsView({ employees, attendance, now }) {
               <YAxis tick={{ fontSize: 12 }} allowDecimals={false} />
               <Tooltip />
               <Legend wrapperStyle={{ fontSize: 12.5 }} />
-              <Bar dataKey="Present" stackId="a" fill={COLORS.green} />
-              <Bar dataKey="Late" stackId="a" fill={COLORS.amber} />
-              <Bar dataKey="Half Day" stackId="a" fill="#E8B94A" />
-              <Bar dataKey="WFH" stackId="a" fill={COLORS.blue} />
-              <Bar dataKey="Leave" stackId="a" fill="#3E5A9E" />
-              <Bar dataKey="Absent" stackId="a" fill={COLORS.red} radius={[4, 4, 0, 0]} />
+              <Bar dataKey="Present" stackId="a" fill={COLORS.green} animationEasing="ease-out" animationBegin={0} />
+              <Bar dataKey="Late" stackId="a" fill={COLORS.amber} animationEasing="ease-out" animationBegin={60} />
+              <Bar dataKey="Half Day" stackId="a" fill="#E8B94A" animationEasing="ease-out" animationBegin={120} />
+              <Bar dataKey="WFH" stackId="a" fill={COLORS.blue} animationEasing="ease-out" animationBegin={180} />
+              <Bar dataKey="Leave" stackId="a" fill="#3E5A9E" animationEasing="ease-out" animationBegin={240} />
+              <Bar dataKey="Absent" stackId="a" fill={COLORS.red} radius={[4, 4, 0, 0]} animationEasing="ease-out" animationBegin={300} />
             </BarChart>
           </ResponsiveContainer>
         </div>

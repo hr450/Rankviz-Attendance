@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Loader2 } from "lucide-react";
+import { LogoMark } from "./components/ui";
 import { COLORS, SUPABASE_CONFIGURED } from "./lib/constants";
 import { todayStr } from "./lib/utils";
 import {
@@ -182,8 +183,11 @@ export default function App() {
 
   if (loading) {
     return (
-      <div style={{ height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: COLORS.bg }}>
-        <Loader2 className="rv-spin" color={COLORS.orange} size={32} />
+      <div style={{ height: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14, background: COLORS.bg }}>
+        <div className="rv-anim-float" style={{ filter: "drop-shadow(0 8px 18px rgba(47,111,237,0.25))" }}>
+          <LogoMark size={44} dark={false} />
+        </div>
+        <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.muted, letterSpacing: 0.3 }}>Loading RankViz…</span>
       </div>
     );
   }
@@ -193,7 +197,7 @@ export default function App() {
   if (stage === "entering") {
     return (
       <Splash
-        holdMs={300}
+        holdMs={900}
         subtitle={session.role === "admin" ? `Welcome back, ${session.name?.split(" ")[0] || "there"}` : `Hi, ${session.name?.split(" ")[0] || "there"} — have a great day`}
         onDone={() => setStage("app")}
       />

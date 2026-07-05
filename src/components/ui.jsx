@@ -45,7 +45,7 @@ export function StatCard({ label, value, tone }) {
   const s = TONE_STYLES[tone] || TONE_STYLES.pending;
   const display = useCountUp(value);
   return (
-    <div className="rv-card rv-stat-card" style={{ padding: "18px 20px", "--rv-accent": s.dot }}>
+    <div className="rv-card rv-stat-card rv-anim-popin" style={{ padding: "18px 20px", "--rv-accent": s.dot }}>
       <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 6 }}>
         <span style={{ width: 8, height: 8, borderRadius: 99, background: s.dot }} />
         <span style={{ fontSize: 27, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{display}</span>
@@ -95,7 +95,7 @@ export const secondaryBtn = {
 export const th = { padding: "9px 12px", fontWeight: 600 };
 export const td = { padding: "12px 12px", fontSize: 14 };
 
-export function LogoMark({ size = 40, showWord = true, dark = true }) {
+export function LogoMark({ size = 40, showWord = false, dark = true }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
       <img

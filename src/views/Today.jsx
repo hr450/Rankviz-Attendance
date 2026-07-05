@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { LogIn, LogOut, Home, Coffee } from "lucide-react";
 import { COLORS } from "../lib/constants";
 import { computeStatus, fmtTime, todayStr } from "../lib/utils";
@@ -7,10 +7,17 @@ import { StatusPill, StatCard, IconBtn, th, td } from "../components/ui";
 export default function TodayView({ employees, attendance, now, punch }) {
   const date = todayStr(now);
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const [flashId, setFlashId] = useState(null);
+
+  const handlePunch = (empId, action, meta) => {
+    punch(empId, action, meta);
+    setFlashId(empId);
+    setTimeout(() => setFlashId(id => (id === empId ? null : id)), 900);
+  };
 
   const rows = employees.map(emp => {
     const rec = attendance[`${emp.id}|${date}`];
-    const status = computeStatus(emp, rec, false, nowMinutes);
+    const status = computeStatus(emp, rec, false, nowMinutes, date);
     return { emp, rec, status };
   });
 
@@ -24,8 +31,12 @@ export default function TodayView({ employees, attendance, now, punch }) {
 
   return (
     <div className="rv-anim-fadein">
-      <h1 style={{ fontSize: 28, fontWeight: 800, margin: "0 0 4px" }}>Today</h1>
-      <p style={{ color: COLORS.muted, margin: "0 0 22px", fontSize: 14.5 }}>
+      <h1 className="rv-header-in" style={{ fontSize: 28, fontWeight: 800, margin: "0 0 4px" }}>Today</h1>
+      <p style={{ color: COLORS.muted, margin: "0 0 22px", fontSize: 14.5, display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{ position: "relative", display: "inline-flex", width: 8, height: 8 }}>
+          <span className="rv-live-dot" style={{ position: "absolute", inset: 0, borderRadius: 99, background: COLORS.green || "#2F9E6E" }} />
+          <span style={{ position: "relative", width: 8, height: 8, borderRadius: 99, background: COLORS.green || "#2F9E6E" }} />
+        </span>
         Live view of who's in, who's remote, who hasn't punched in yet — {now.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" })}.
       </p>
 
@@ -52,13 +63,17 @@ export default function TodayView({ employees, attendance, now, punch }) {
             </thead>
             <tbody>
               {rows.map(({ emp, rec, status }, i) => (
-                <tr key={emp.id} className="rv-row-in" style={{ borderTop: `1px solid ${COLORS.line}`, animationDelay: `${i * 35}ms` }}>
+                <tr
+                  key={emp.id}
+                  className={`rv-row-in ${flashId === emp.id ? "rv-row-flash" : ""}`}
+                  style={{ borderTop: `1px solid ${COLORS.line}`, animationDelay: `${i * 35}ms` }}
+                >
                   <td style={td}><strong>{emp.name}</strong></td>
                   <td style={{ ...td, color: COLORS.muted }}>{emp.department}</td>
                   <td style={td}><StatusPill {...status} /></td>
                   <td style={{ ...td, color: COLORS.muted }}>{fmtTime(rec?.checkIn || rec?.wfhCheckIn)}</td>
                   <td style={{ ...td, color: COLORS.muted }}>{fmtTime(rec?.checkOut || rec?.wfhCheckOut)}</td>
-                  <td style={td}><QuickActions emp={emp} rec={rec} punch={punch} /></td>
+                  <td style={td}><QuickActions emp={emp} rec={rec} punch={handlePunch} /></td>
                 </tr>
               ))}
               {rows.length === 0 && (

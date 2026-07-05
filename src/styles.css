@@ -81,6 +81,11 @@ input:focus, select:focus, textarea:focus {
   0% { box-shadow: 0 0 0 0 rgba(47,111,237,0.35); }
   100% { box-shadow: 0 0 0 18px rgba(47,111,237,0); }
 }
+@keyframes rvLivePulse {
+  0% { transform: scale(1); opacity: .55; }
+  100% { transform: scale(2.6); opacity: 0; }
+}
+.rv-live-dot { animation: rvLivePulse 1.6s ease-out infinite; }
 
 .rv-anim-fadein { animation: rvFadeIn .5s ease both; }
 .rv-anim-popin { animation: rvPopIn .7s cubic-bezier(.34,1.56,.64,1) both; }
@@ -148,8 +153,28 @@ input:focus, select:focus, textarea:focus {
 
 @media (prefers-reduced-motion: reduce) {
   .rv-anim-fadein, .rv-anim-popin, .rv-anim-float, .rv-anim-slideupin,
-  .rv-row-in, .rv-pill-in, .rv-stat-card, .rv-nav-btn, .rv-nav-icon, .rv-save-dot--pulsing {
+  .rv-row-in, .rv-pill-in, .rv-stat-card, .rv-nav-btn, .rv-nav-icon, .rv-save-dot--pulsing,
+  .rv-btn-primary, .rv-btn-secondary, .rv-row-flash, .rv-header-in, .rv-live-dot {
     animation: none !important;
     transition: none !important;
   }
 }
+
+/* ---------- buttons ---------- */
+.rv-btn-primary, .rv-btn-secondary {
+  transition: transform .16s cubic-bezier(.22,1,.36,1), box-shadow .16s ease, filter .16s ease, background .16s ease;
+}
+.rv-btn-primary:hover { transform: translateY(-2px); filter: brightness(1.05); box-shadow: 0 10px 22px rgba(47,111,237,0.32); }
+.rv-btn-primary:active { transform: translateY(0) scale(0.98); }
+.rv-btn-secondary:hover { background: #E9EEFC; transform: translateY(-1px); }
+.rv-btn-secondary:active { transform: translateY(0) scale(0.98); }
+
+/* ---------- row success flash (e.g. after a punch action) ---------- */
+@keyframes rvRowFlash {
+  0% { background-color: #DFF3E8; }
+  100% { background-color: transparent; }
+}
+.rv-row-flash { animation: rvRowFlash 900ms ease; }
+
+/* ---------- header entrance ---------- */
+.rv-header-in { animation: rvSlideUpIn .5s cubic-bezier(.22,1,.36,1) both; }
