@@ -7,9 +7,7 @@ export function todayStr(d = new Date()) {
   const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, "0"), day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
-export function fmtTime(d) {
-  if (!d) return "—";
-  return new Date(d).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Karachi" });
+
 }
 export function fmtHrs(h) {
   if (h == null) return "—";
