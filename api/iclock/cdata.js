@@ -5,6 +5,11 @@
 //   - table=OPERLOG  -> device operation log, includes new fingerprint/user enrollments
 //
 // The device also does a GET to this same URL first (handshake), expecting "OK".
+//
+// IMPORTANT: the `employees` table has NO separate zk_user_id column.
+// The device's numeric PIN is encoded directly into the employees.id field,
+// e.g. device PIN 1001 -> employees.id = "emp_zk1001".
+// So "look up by zk id" means "look up employees.id = emp_zk<PIN>".
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -31,10 +36,16 @@ function toDateStr(d) {
   return d.toISOString().slice(0, 10); // YYYY-MM-DD
 }
 
-// Find (or note missing) employee by their device fingerprint ID (zk_user_id)
+// Build the employees.id used for a given device PIN.
+function zkIdToEmployeeId(zkUserId) {
+  return `emp_zk${zkUserId}`;
+}
+
+// Find employee by their device fingerprint PIN, via the encoded id column.
 async function findEmployeeByZkId(zkUserId) {
+  const empId = zkIdToEmployeeId(zkUserId);
   const rows = await supabaseFetch(
-    `employees?zk_user_id=eq.${encodeURIComponent(zkUserId)}&select=id,zk_user_id`
+    `employees?id=eq.${encodeURIComponent(empId)}&select=id`
   );
   return rows && rows[0] ? rows[0] : null;
 }
@@ -42,7 +53,7 @@ async function findEmployeeByZkId(zkUserId) {
 // Auto-create a bare employee record from a new fingerprint enrollment.
 // HR fills in the real name/department/etc later in the web app.
 async function autoCreateEmployee(zkUserId, deviceName) {
-  const id = `emp_zk${zkUserId}`;
+  const id = zkIdToEmployeeId(zkUserId);
   await supabaseFetch("employees", {
     method: "POST",
     prefer: "resolution=merge-duplicates,return=representation",
@@ -50,7 +61,6 @@ async function autoCreateEmployee(zkUserId, deviceName) {
       id,
       name: deviceName && deviceName.trim() ? deviceName.trim() : `New Employee (${zkUserId})`,
       department: "Unassigned",
-      zk_user_id: zkUserId,
     }),
   });
   return id;
@@ -99,40 +109,59 @@ async function applyPunch(employeeId, punchTime) {
 }
 
 // Parse ATTLOG body: one punch per line, tab-separated: PIN\tTimestamp\tStatus\t...
+// Tracks per-line failures so one bad row can't silently swallow the rest.
 async function handleAttlog(body) {
   const lines = body.split("\n").map((l) => l.trim()).filter(Boolean);
+  let processed = 0;
+  const errors = [];
+
   for (const line of lines) {
-    const parts = line.split("\t");
-    const pin = parts[0];
-    const timeStr = parts[1]; // "YYYY-MM-DD HH:MM:SS"
-    if (!pin || !timeStr) continue;
+    try {
+      const parts = line.split("\t");
+      const pin = parts[0];
+      const timeStr = parts[1]; // "YYYY-MM-DD HH:MM:SS"
+      if (!pin || !timeStr) continue;
 
-    const punchTime = new Date(timeStr.replace(" ", "T"));
-    if (isNaN(punchTime.getTime())) continue;
+      const punchTime = new Date(timeStr.replace(" ", "T"));
+      if (isNaN(punchTime.getTime())) continue;
 
-    let employee = await findEmployeeByZkId(pin);
-    if (!employee) {
-      const newId = await autoCreateEmployee(pin, null);
-      employee = { id: newId };
+      let employee = await findEmployeeByZkId(pin);
+      if (!employee) {
+        const newId = await autoCreateEmployee(pin, null);
+        employee = { id: newId };
+      }
+      await applyPunch(employee.id, punchTime);
+      processed++;
+    } catch (lineErr) {
+      errors.push({ line, message: lineErr.message });
+      console.error("zkteco ATTLOG line error:", line, lineErr);
     }
-    await applyPunch(employee.id, punchTime);
   }
+
+  console.log(
+    `zkteco ATTLOG: ${processed}/${lines.length} lines processed, ${errors.length} errors`
+  );
+  return { processed, total: lines.length, errors };
 }
 
 // Parse OPERLOG body: includes lines like "USER PIN=123\tName=John\t..."
 async function handleOperlog(body) {
   const lines = body.split("\n").map((l) => l.trim()).filter(Boolean);
   for (const line of lines) {
-    if (!line.startsWith("USER")) continue;
-    const pinMatch = line.match(/PIN=(\S+)/);
-    const nameMatch = line.match(/Name=([^\t]+)/);
-    if (!pinMatch) continue;
-    const pin = pinMatch[1];
-    const name = nameMatch ? nameMatch[1] : null;
+    try {
+      if (!line.startsWith("USER")) continue;
+      const pinMatch = line.match(/PIN=(\S+)/);
+      const nameMatch = line.match(/Name=([^\t]+)/);
+      if (!pinMatch) continue;
+      const pin = pinMatch[1];
+      const name = nameMatch ? nameMatch[1] : null;
 
-    const existing = await findEmployeeByZkId(pin);
-    if (!existing) {
-      await autoCreateEmployee(pin, name);
+      const existing = await findEmployeeByZkId(pin);
+      if (!existing) {
+        await autoCreateEmployee(pin, name);
+      }
+    } catch (lineErr) {
+      console.error("zkteco OPERLOG line error:", line, lineErr);
     }
   }
 }
@@ -149,6 +178,7 @@ export default async function handler(req, res) {
   }
 
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    console.error("zkteco cdata: missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY env vars");
     res.status(500).send("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not configured");
     return;
   }
@@ -170,12 +200,15 @@ export default async function handler(req, res) {
         await handleAttlog(body);
       } else if (table === "OPERLOG") {
         await handleOperlog(body);
+      } else {
+        console.log(`zkteco cdata: unrecognized table param "${table}", ignoring body`);
       }
       // Devices expect a plain "OK" response, not JSON.
       res.status(200).send("OK");
     } catch (err) {
-      console.error("zkteco cdata error:", err);
-      res.status(200).send("OK"); // still ack so device doesn't retry-storm
+      // Log the REAL reason clearly, but still ack "OK" so the device doesn't retry-storm.
+      console.error("zkteco cdata error:", err.message, err.stack);
+      res.status(200).send("OK");
     }
     return;
   }
