@@ -138,6 +138,16 @@ async function handleOperlog(body) {
 }
 
 export default async function handler(req, res) {
+  // Allow the browser-based history upload tool (and any other client) to call this endpoint.
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") {
+    res.status(200).end();
+    return;
+  }
+
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     res.status(500).send("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not configured");
     return;
