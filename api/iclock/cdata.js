@@ -14,8 +14,20 @@
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+// Normalize the base URL: strip trailing slashes AND strip a trailing
+// "/rest/v1" if someone pasted the REST endpoint instead of the bare
+// project URL. This makes supabaseFetch immune to either being stored
+// in the env var.
+function getSupabaseBaseUrl() {
+  let base = (SUPABASE_URL || "").trim();
+  base = base.replace(/\/+$/, ""); // strip trailing slash(es)
+  base = base.replace(/\/rest\/v1$/i, ""); // strip trailing /rest/v1 if present
+  base = base.replace(/\/+$/, ""); // strip trailing slash(es) again, just in case
+  return base;
+}
+
 async function supabaseFetch(path, options = {}) {
-  const base = SUPABASE_URL.replace(/\/+$/, "");
+  const base = getSupabaseBaseUrl();
   const fullUrl = `${base}/rest/v1/${path}`;
   console.log("zkteco DEBUG supabaseFetch URL:", JSON.stringify(fullUrl));
   const res = await fetch(fullUrl, {
@@ -28,11 +40,16 @@ async function supabaseFetch(path, options = {}) {
       ...(options.headers || {}),
     },
   });
+  const text = await res.text();
   if (!res.ok) {
-    const text = await res.text();
     throw new Error(`Supabase ${path} failed: ${res.status} ${text}`);
   }
-  return res.status === 204 ? null : res.json();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
 }
 
 function toDateStr(d) {
