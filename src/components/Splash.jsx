@@ -9,10 +9,11 @@ import bgImage from "../assets/login-background.webp";
  */
 export default function Splash({ onDone, subtitle = "Attendance, made visible.", holdMs = 150 }) {
   const [phase, setPhase] = useState("in"); // in -> hold -> out
+  const SLIDE_MS = 1000;
 
   useEffect(() => {
     const t1 = setTimeout(() => setPhase("out"), holdMs);
-    const t2 = setTimeout(() => onDone && onDone(), holdMs + 350);
+    const t2 = setTimeout(() => onDone && onDone(), holdMs + SLIDE_MS);
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [holdMs, onDone]);
 
@@ -22,7 +23,7 @@ export default function Splash({ onDone, subtitle = "Attendance, made visible.",
       backgroundImage: `linear-gradient(180deg, rgba(6,12,28,0.55), rgba(6,12,28,0.8)), url(${bgImage})`,
       backgroundSize: "cover", backgroundPosition: "center",
       display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column",
-      animation: phase === "out" ? "rvSlideUpOut .35s cubic-bezier(.6,0,.4,1) forwards" : undefined,
+      animation: phase === "out" ? `rvSlideUpOut ${SLIDE_MS}ms cubic-bezier(.6,0,.4,1) forwards` : undefined,
     }}>
       <div className="rv-anim-popin" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
         <div className="rv-anim-float">

@@ -1,6 +1,4 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { Loader2 } from "lucide-react";
-import { LogoMark } from "./components/ui";
 import { COLORS, SUPABASE_CONFIGURED } from "./lib/constants";
 import { todayStr } from "./lib/utils";
 import {
@@ -191,17 +189,6 @@ export default function App() {
 
   if (!SUPABASE_CONFIGURED) return <ConfigNotice />;
   if (loadError) return <ErrorNotice message={loadError} />;
-
-  if (loading) {
-    return (
-      <div style={{ height: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14, background: COLORS.bg }}>
-        <div className="rv-anim-float" style={{ filter: "drop-shadow(0 8px 18px rgba(47,111,237,0.25))" }}>
-          <LogoMark size={44} dark={false} />
-        </div>
-        <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.muted, letterSpacing: 0.3 }}>Loading RankViz…</span>
-      </div>
-    );
-  }
 
   if (stage === "boot") return <Splash onDone={() => setStage("login")} />;
   if (stage === "login") return <Login onLogin={handleLogin} />;
