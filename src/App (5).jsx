@@ -22,6 +22,7 @@ import ReportsView from "./views/Reports";
 import MonthlyReportView from "./views/MonthlyReport";
 import EmployeeDashboard from "./views/EmployeeDashboard";
 import LeaveApprovalsView from "./views/LeaveApprovals";
+import LeaveSummaryView from "./views/LeaveSummary";
 
 export default function App() {
   const [stage, setStage] = useState("boot"); // boot -> login -> entering -> app
@@ -239,6 +240,14 @@ export default function App() {
             onDecide={decideLeave}
             onAddType={addLeaveType}
             onRemoveType={removeLeaveType}
+          />
+        )}
+        {tab === "leaveSummary" && (
+          <LeaveSummaryView
+            employees={employees}
+            attendance={attendance}
+            leaveRequests={leaveRequests}
+            now={now}
           />
         )}
       </Shell>
