@@ -103,8 +103,8 @@ export default function ReportsView({ employees, attendance, now }) {
         <StatCard label="Absent days" value={teamTotals.absent} tone="absent" />
       </div>
 
-      <div className="rv-card rv-anim-popin" style={{ padding: 20, marginBottom: 20 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
+      <div className="rv-card rv-anim-popin" style={{ padding: 24, marginBottom: 20, background: "linear-gradient(180deg, #ffffff, #FAFBFF)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
           <h3 style={{ margin: 0, fontSize: 15.5, fontWeight: 700 }}>Attendance breakdown</h3>
           {!hasChartData && (
             <span style={{ fontSize: 12, color: COLORS.muted }}>
@@ -112,29 +112,7 @@ export default function ReportsView({ employees, attendance, now }) {
             </span>
           )}
         </div>
-        <div style={{ width: "100%", height: 280 }}>
-          <ResponsiveContainer>
-            <BarChart data={chartData} barCategoryGap={18}>
-              <CartesianGrid strokeDasharray="3 3" stroke={COLORS.line} vertical={false} />
-              <XAxis dataKey="name" tick={{ fontSize: 12 }} axisLine={{ stroke: COLORS.line }} tickLine={false} />
-              <YAxis
-                tick={{ fontSize: 12 }}
-                allowDecimals={false}
-                axisLine={false}
-                tickLine={false}
-                domain={hasChartData ? [0, "auto"] : [0, 5]}
-              />
-              <Tooltip content={<ReportTooltip />} cursor={{ fill: COLORS.bg }} />
-              <Legend wrapperStyle={{ fontSize: 12.5 }} />
-              <Bar dataKey="Present" stackId="a" fill={COLORS.green} animationEasing="ease-out" animationBegin={0} />
-              <Bar dataKey="Late" stackId="a" fill={COLORS.amber} animationEasing="ease-out" animationBegin={60} />
-              <Bar dataKey="Half Day" stackId="a" fill="#E8B94A" animationEasing="ease-out" animationBegin={120} />
-              <Bar dataKey="WFH" stackId="a" fill={COLORS.blue} animationEasing="ease-out" animationBegin={180} />
-              <Bar dataKey="Leave" stackId="a" fill="#3E5A9E" animationEasing="ease-out" animationBegin={240} />
-              <Bar dataKey="Absent" stackId="a" fill={COLORS.red} radius={[4, 4, 0, 0]} animationEasing="ease-out" animationBegin={300} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+        <Attendance3DChart data={chartData} hasChartData={hasChartData} />
       </div>
 
       <div className="rv-card" style={{ padding: "16px 20px", overflowX: "auto" }}>
@@ -223,6 +201,85 @@ export default function ReportsView({ employees, attendance, now }) {
         Late = check-in more than {GRACE_MIN} min after shift start. Half day = fewer than {HALFDAY_HOURS} hours worked.
         Alternate day = a day an employee worked to make up for a leave.
       </p>
+    </div>
+  );
+}
+
+/* ---------------- Pseudo-3D isometric stacked bar chart ---------------- */
+
+const SERIES = [
+  { key: "Present", color: "#2F9E6E" },
+  { key: "Late", color: "#D99A2B" },
+  { key: "Half Day", color: "#E8B94A" },
+  { key: "WFH", color: "#2F6FED" },
+  { key: "Leave", color: "#3E5A9E" },
+  { key: "Absent", color: "#D9534F" },
+];
+const DEPTH = 7; // px of isometric "extrusion"
+
+function shade(hex, percent) {
+  const n = parseInt(hex.replace("#", ""), 16);
+  const r = Math.min(255, Math.max(0, ((n >> 16) & 0xff) + Math.round(2.55 * percent)));
+  const g = Math.min(255, Math.max(0, ((n >> 8) & 0xff) + Math.round(2.55 * percent)));
+  const b = Math.min(255, Math.max(0, (n & 0xff) + Math.round(2.55 * percent)));
+  return `rgb(${r},${g},${b})`;
+}
+
+/* Draws one stacked segment as a 3D block: flat front face, plus a lighter
+   top cap and darker right-side face that extend past the bar's footprint
+   so the front faces of adjacent stacked segments still line up cleanly
+   with the axis. */
+function make3DBar(color) {
+  return function Bar3DShape(props) {
+    const { x, y, width, height } = props;
+    if (!height || height <= 0 || !width) return null;
+    const top = shade(color, 22);
+    const side = shade(color, -20);
+    return (
+      <g style={{ filter: "drop-shadow(0 3px 4px rgba(15,27,51,0.12))" }}>
+        <rect x={x} y={y} width={width} height={height} fill={color} />
+        <polygon
+          points={`${x},${y} ${x + DEPTH},${y - DEPTH} ${x + width + DEPTH},${y - DEPTH} ${x + width},${y}`}
+          fill={top}
+        />
+        <polygon
+          points={`${x + width},${y} ${x + width + DEPTH},${y - DEPTH} ${x + width + DEPTH},${y + height - DEPTH} ${x + width},${y + height}`}
+          fill={side}
+        />
+      </g>
+    );
+  };
+}
+
+function Attendance3DChart({ data, hasChartData }) {
+  return (
+    <div style={{ width: "100%", height: 300 }}>
+      <ResponsiveContainer>
+        <BarChart data={data} barCategoryGap={26} margin={{ top: 16, right: DEPTH + 4, left: 0, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke={COLORS.line} vertical={false} />
+          <XAxis dataKey="name" tick={{ fontSize: 12 }} axisLine={{ stroke: COLORS.line }} tickLine={false} />
+          <YAxis
+            tick={{ fontSize: 12 }}
+            allowDecimals={false}
+            axisLine={false}
+            tickLine={false}
+            domain={hasChartData ? [0, "auto"] : [0, 5]}
+          />
+          <Tooltip content={<ReportTooltip />} cursor={{ fill: COLORS.bg }} />
+          <Legend wrapperStyle={{ fontSize: 12.5, paddingTop: 8 }} />
+          {SERIES.map(s => (
+            <Bar
+              key={s.key}
+              dataKey={s.key}
+              stackId="a"
+              fill={s.color}
+              shape={make3DBar(s.color)}
+              isAnimationActive={true}
+              animationEasing="ease-out"
+            />
+          ))}
+        </BarChart>
+      </ResponsiveContainer>
     </div>
   );
 }
