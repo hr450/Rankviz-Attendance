@@ -128,19 +128,6 @@ export default function Login({ onLogin }) {
             {busy ? "Please wait…" : (mode === "admin" && adminTab === "signup" ? "Create account" : "Log in")}
           </button>
 
-          <div style={{ textAlign: "center", marginTop: 20, fontSize: 13.5 }}>
-            {mode === "admin" ? (
-              <a href="#" onClick={e => { e.preventDefault(); setMode("employee"); setError(""); }}
-                style={{ color: COLORS.orange, fontWeight: 700, textDecoration: "none" }}>
-                Employee?? login here →
-              </a>
-            ) : (
-              <a href="#" onClick={e => { e.preventDefault(); setMode("admin"); setError(""); }}
-                style={{ color: COLORS.orange, fontWeight: 700, textDecoration: "none" }}>
-                Admin?? login here →
-              </a>
-            )}
-          </div>
         </div>
 
         <p style={{ textAlign: "center", color: "rgba(255,255,255,0.65)", fontSize: 12, marginTop: 18 }}>
