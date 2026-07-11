@@ -205,7 +205,7 @@ export default function ReportsView({ employees, attendance, now }) {
   );
 }
 
-/* ---------------- Pseudo-3D isometric stacked bar chart ---------------- */
+/* ---------------- Clean stacked bar chart with subtle depth ---------------- */
 
 const SERIES = [
   { key: "Present", color: "#2F9E6E" },
@@ -215,7 +215,6 @@ const SERIES = [
   { key: "Leave", color: "#3E5A9E" },
   { key: "Absent", color: "#D9534F" },
 ];
-const DEPTH = 7; // px of isometric "extrusion"
 
 function shade(hex, percent) {
   const n = parseInt(hex.replace("#", ""), 16);
@@ -225,37 +224,23 @@ function shade(hex, percent) {
   return `rgb(${r},${g},${b})`;
 }
 
-/* Draws one stacked segment as a 3D block: flat front face, plus a lighter
-   top cap and darker right-side face that extend past the bar's footprint
-   so the front faces of adjacent stacked segments still line up cleanly
-   with the axis. */
-function make3DBar(color) {
-  return function Bar3DShape(props) {
-    const { x, y, width, height } = props;
-    if (!height || height <= 0 || !width) return null;
-    const top = shade(color, 22);
-    const side = shade(color, -20);
-    return (
-      <g style={{ filter: "drop-shadow(0 3px 4px rgba(15,27,51,0.12))" }}>
-        <rect x={x} y={y} width={width} height={height} fill={color} />
-        <polygon
-          points={`${x},${y} ${x + DEPTH},${y - DEPTH} ${x + width + DEPTH},${y - DEPTH} ${x + width},${y}`}
-          fill={top}
-        />
-        <polygon
-          points={`${x + width},${y} ${x + width + DEPTH},${y - DEPTH} ${x + width + DEPTH},${y + height - DEPTH} ${x + width},${y + height}`}
-          fill={side}
-        />
-      </g>
-    );
-  };
+function gradId(key) {
+  return `attnGrad-${key.replace(/\s+/g, "")}`;
 }
 
 function Attendance3DChart({ data, hasChartData }) {
   return (
     <div style={{ width: "100%", height: 300 }}>
       <ResponsiveContainer>
-        <BarChart data={data} barCategoryGap={26} margin={{ top: 16, right: DEPTH + 4, left: 0, bottom: 0 }}>
+        <BarChart data={data} barCategoryGap={22} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+          <defs>
+            {SERIES.map(s => (
+              <linearGradient key={s.key} id={gradId(s.key)} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={shade(s.color, 25)} />
+                <stop offset="100%" stopColor={s.color} />
+              </linearGradient>
+            ))}
+          </defs>
           <CartesianGrid strokeDasharray="3 3" stroke={COLORS.line} vertical={false} />
           <XAxis dataKey="name" tick={{ fontSize: 12 }} axisLine={{ stroke: COLORS.line }} tickLine={false} />
           <YAxis
@@ -266,16 +251,14 @@ function Attendance3DChart({ data, hasChartData }) {
             domain={hasChartData ? [0, "auto"] : [0, 5]}
           />
           <Tooltip content={<ReportTooltip />} cursor={{ fill: COLORS.bg }} />
-          <Legend wrapperStyle={{ fontSize: 12.5, paddingTop: 8 }} />
-          {SERIES.map(s => (
+          <Legend iconType="circle" iconSize={9} wrapperStyle={{ fontSize: 13, paddingTop: 12 }} />
+          {SERIES.map((s, idx) => (
             <Bar
               key={s.key}
               dataKey={s.key}
               stackId="a"
-              fill={s.color}
-              shape={make3DBar(s.color)}
-              isAnimationActive={true}
-              animationEasing="ease-out"
+              fill={`url(#${gradId(s.key)})`}
+              radius={idx === SERIES.length - 1 ? [4, 4, 0, 0] : 0}
             />
           ))}
         </BarChart>
