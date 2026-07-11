@@ -9,7 +9,7 @@ import bgImage from "../assets/login-background.webp";
  */
 export default function Splash({ onDone, subtitle = "Attendance, made visible.", holdMs = 150 }) {
   const [phase, setPhase] = useState("in"); // in -> hold -> out
-  const SLIDE_MS = 1000;
+  const SLIDE_MS = 500;
 
   useEffect(() => {
     const t1 = setTimeout(() => setPhase("out"), holdMs);
@@ -27,7 +27,7 @@ export default function Splash({ onDone, subtitle = "Attendance, made visible.",
     }}>
       <div className="rv-anim-popin" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
         <div className="rv-anim-float">
-          <LogoMark size={78} showWord={false} />
+          <LogoMark size={78} />
         </div>
         <div style={{ color: "#B9C3E8", fontSize: 14, fontWeight: 500 }}>{subtitle}</div>
       </div>
