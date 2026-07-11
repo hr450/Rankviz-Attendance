@@ -8,6 +8,7 @@ import {
   loadAccounts, recKey,
   loadLeaveTypes, createLeaveType, deleteLeaveType,
   loadLeaveRequests, createLeaveRequest, decideLeaveRequest,
+  loadLeaveBalances, saveLeaveBalance,
 } from "./lib/db";
 import { notifyHR } from "./lib/email";
 
@@ -23,6 +24,7 @@ import MonthlyReportView from "./views/MonthlyReport";
 import EmployeeDashboard from "./views/EmployeeDashboard";
 import LeaveApprovalsView from "./views/LeaveApprovals";
 import LeaveSummaryView from "./views/LeaveSummary";
+import LeaveBalancesView from "./views/LeaveBalances";
 
 export default function App() {
   const [stage, setStage] = useState("boot"); // boot -> login -> entering -> app
@@ -40,6 +42,7 @@ export default function App() {
 
   const [leaveTypes, setLeaveTypes] = useState([]);
   const [leaveRequests, setLeaveRequests] = useState([]);
+  const [leaveBalances, setLeaveBalances] = useState({});
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
@@ -57,11 +60,13 @@ export default function App() {
         accts.forEach(a => { if (a.employeeId) byEmp[a.employeeId] = a; });
         const types = await loadLeaveTypes();
         const requests = await loadLeaveRequests();
+        const balances = await loadLeaveBalances();
         setEmployees(emps);
         setAttendance(att);
         setAccountsByEmp(byEmp);
         setLeaveTypes(types);
         setLeaveRequests(requests);
+        setLeaveBalances(balances);
       } catch (e) {
         setLoadError(e.message);
       }
@@ -121,6 +126,11 @@ export default function App() {
   const removeLeaveType = useCallback(async (id) => {
     await deleteLeaveType(id);
     setLeaveTypes(await loadLeaveTypes());
+  }, []);
+
+  const updateLeaveBalance = useCallback(async (employeeId, balance) => {
+    setLeaveBalances(prev => ({ ...prev, [employeeId]: balance }));
+    await saveLeaveBalance(employeeId, balance);
   }, []);
 
   const persistEmployees = useCallback(async (next) => {
@@ -248,6 +258,13 @@ export default function App() {
             attendance={attendance}
             leaveRequests={leaveRequests}
             now={now}
+          />
+        )}
+        {tab === "leaveBalances" && (
+          <LeaveBalancesView
+            employees={employees}
+            leaveBalances={leaveBalances}
+            onUpdate={updateLeaveBalance}
           />
         )}
       </Shell>
