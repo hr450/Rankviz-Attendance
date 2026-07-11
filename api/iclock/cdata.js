@@ -14,8 +14,29 @@
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+// Minimum gap (ms) between check-in and a later punch for that later punch
+// to count as a real check-out. Anything closer than this is treated as a
+// duplicate/double-scan and ignored, leaving check_out empty until a real
+// end-of-day punch comes in.
+const MIN_CHECKOUT_GAP_MS = 60 * 1000; // 1 minute
+
+// Normalize the base URL: strip trailing slashes AND strip a trailing
+// "/rest/v1" if someone pasted the REST endpoint instead of the bare
+// project URL. This makes supabaseFetch immune to either being stored
+// in the env var.
+function getSupabaseBaseUrl() {
+  let base = (SUPABASE_URL || "").trim();
+  base = base.replace(/\/+$/, ""); // strip trailing slash(es)
+  base = base.replace(/\/rest\/v1$/i, ""); // strip trailing /rest/v1 if present
+  base = base.replace(/\/+$/, ""); // strip trailing slash(es) again, just in case
+  return base;
+}
+
 async function supabaseFetch(path, options = {}) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+  const base = getSupabaseBaseUrl();
+  const fullUrl = `${base}/rest/v1/${path}`;
+  console.log("zkteco DEBUG supabaseFetch URL:", JSON.stringify(fullUrl));
+  const res = await fetch(fullUrl, {
     ...options,
     headers: {
       apikey: SUPABASE_SERVICE_ROLE_KEY,
@@ -25,11 +46,16 @@ async function supabaseFetch(path, options = {}) {
       ...(options.headers || {}),
     },
   });
+  const text = await res.text();
   if (!res.ok) {
-    const text = await res.text();
     throw new Error(`Supabase ${path} failed: ${res.status} ${text}`);
   }
-  return res.status === 204 ? null : res.json();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
 }
 
 function toDateStr(d) {
@@ -68,7 +94,9 @@ async function autoCreateEmployee(zkUserId, deviceName) {
 
 // Apply one punch to today's/that day's attendance row using the agreed rules:
 // - no row yet -> this punch is check_in
-// - row has check_in but no check_out -> this punch is check_out
+// - row has check_in but no check_out ->
+//     - if this punch is at least MIN_CHECKOUT_GAP_MS after check_in, it's check_out
+//     - otherwise it's a duplicate/double-scan of the check-in, ignore it
 // - row already has both -> duplicate, ignore
 async function applyPunch(employeeId, punchTime) {
   const dateStr = toDateStr(punchTime);
@@ -93,6 +121,15 @@ async function applyPunch(employeeId, punchTime) {
   }
 
   if (row.check_in && !row.check_out) {
+    const checkInTime = new Date(row.check_in);
+    const gapMs = punchTime.getTime() - checkInTime.getTime();
+
+    if (gapMs < MIN_CHECKOUT_GAP_MS) {
+      // Same/near-identical punch as check-in (double-scan) -> not a real
+      // check-out. Leave check_out empty until a genuine later punch comes in.
+      return "duplicate_ignored";
+    }
+
     await supabaseFetch(
       `attendance?employee_id=eq.${encodeURIComponent(employeeId)}&date=eq.${dateStr}`,
       {
