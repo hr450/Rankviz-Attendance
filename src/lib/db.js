@@ -194,6 +194,42 @@ export async function decideLeaveRequest(id, status, decidedBy) {
   });
 }
 
+/* ---------------- Leave balances (HR-managed, per employee) ---------------- */
+function rowToBalance(r) {
+  return {
+    employeeId: r.employee_id,
+    annualAllocated: r.annual_allocated,
+    casualAllocated: r.casual_allocated,
+    sickAllocated: r.sick_allocated,
+    annualRemaining: r.annual_remaining,
+    casualRemaining: r.casual_remaining,
+    sickRemaining: r.sick_remaining,
+  };
+}
+export async function loadLeaveBalances() {
+  const rows = await supaFetch("leave_balances?select=*");
+  const map = {};
+  (rows || []).forEach(r => { map[r.employee_id] = rowToBalance(r); });
+  return map;
+}
+export async function saveLeaveBalance(employeeId, balance) {
+  const row = {
+    employee_id: employeeId,
+    annual_allocated: balance.annualAllocated,
+    casual_allocated: balance.casualAllocated,
+    sick_allocated: balance.sickAllocated,
+    annual_remaining: balance.annualRemaining,
+    casual_remaining: balance.casualRemaining,
+    sick_remaining: balance.sickRemaining,
+    updated_at: new Date().toISOString(),
+  };
+  await supaFetch("leave_balances?on_conflict=employee_id", {
+    method: "POST",
+    headers: { Prefer: "resolution=merge-duplicates" },
+    body: JSON.stringify([row]),
+  });
+}
+
 /* ---------------- Leave log (manual monthly leave policy grid) ---------------- */
 export async function loadLeaveLog(ym) {
   // ym: "YYYY-MM" — loads only that month's rows to keep payloads small.
