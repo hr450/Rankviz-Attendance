@@ -19,6 +19,34 @@ export async function supaFetch(path, options = {}) {
   return res.json().catch(() => null);
 }
 
+// PostgREST caps a single request at ~1000 rows by default. Tables that can
+// grow past that (attendance, leave_log, etc.) need to be paged through with
+// Range headers, or rows beyond the cap silently never reach the app.
+export async function supaFetchAll(path, pageSize = 1000) {
+  let all = [];
+  let from = 0;
+  while (true) {
+    const to = from + pageSize - 1;
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        "Content-Type": "application/json",
+        Range: `${from}-${to}`,
+      },
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`Supabase ${path} failed: ${res.status} ${text}`);
+    }
+    const page = await res.json().catch(() => []);
+    all = all.concat(page || []);
+    if (!page || page.length < pageSize) break; // last page reached
+    from += pageSize;
+  }
+  return all;
+}
+
 /* ---------------- Employees ---------------- */
 function empToRow(e) {
   return {
@@ -55,7 +83,7 @@ export async function saveEmployees(next, prev) {
 
 /* ---------------- Attendance ---------------- */
 export async function loadAttendance() {
-  const rows = await supaFetch("attendance?select=*");
+  const rows = await supaFetchAll("attendance?select=*");
   const map = {};
   (rows || []).forEach(r => {
     map[`${r.employee_id}|${r.date}`] = {
@@ -166,39 +194,28 @@ export async function decideLeaveRequest(id, status, decidedBy) {
   });
 }
 
-/* ---------------- Leave balances (HR-managed, per employee) ---------------- */
-function rowToBalance(r) {
-  return {
-    employeeId: r.employee_id,
-    annualAllocated: r.annual_allocated,
-    casualAllocated: r.casual_allocated,
-    sickAllocated: r.sick_allocated,
-    annualRemaining: r.annual_remaining,
-    casualRemaining: r.casual_remaining,
-    sickRemaining: r.sick_remaining,
-  };
-}
-export async function loadLeaveBalances() {
-  const rows = await supaFetch("leave_balances?select=*");
+/* ---------------- Leave log (manual monthly leave policy grid) ---------------- */
+export async function loadLeaveLog(ym) {
+  // ym: "YYYY-MM" — loads only that month's rows to keep payloads small.
+  const rows = await supaFetchAll(
+    `leave_log?select=employee_id,date,leave_type&date=gte.${ym}-01&date=lte.${ym}-31`
+  );
   const map = {};
-  (rows || []).forEach(r => { map[r.employee_id] = rowToBalance(r); });
+  (rows || []).forEach(r => { map[`${r.employee_id}|${r.date}`] = r.leave_type; });
   return map;
 }
-export async function saveLeaveBalance(employeeId, balance) {
-  const row = {
-    employee_id: employeeId,
-    annual_allocated: balance.annualAllocated,
-    casual_allocated: balance.casualAllocated,
-    sick_allocated: balance.sickAllocated,
-    annual_remaining: balance.annualRemaining,
-    casual_remaining: balance.casualRemaining,
-    sick_remaining: balance.sickRemaining,
-    updated_at: new Date().toISOString(),
-  };
-  await supaFetch("leave_balances?on_conflict=employee_id", {
+export async function saveLeaveLogEntry(employeeId, date, leaveType) {
+  if (!leaveType) {
+    await supaFetch(
+      `leave_log?employee_id=eq.${encodeURIComponent(employeeId)}&date=eq.${date}`,
+      { method: "DELETE" }
+    );
+    return;
+  }
+  await supaFetch("leave_log?on_conflict=employee_id,date", {
     method: "POST",
     headers: { Prefer: "resolution=merge-duplicates" },
-    body: JSON.stringify([row]),
+    body: JSON.stringify([{ employee_id: employeeId, date, leave_type: leaveType }]),
   });
 }
 
