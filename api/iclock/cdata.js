@@ -20,6 +20,34 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 // end-of-day punch comes in.
 const MIN_CHECKOUT_GAP_MS = 60 * 1000; // 1 minute
 
+// --- Overnight-shift handling -------------------------------------------
+// Night-shift staff check in in the evening and check out after midnight.
+// Attendance is stored one row per calendar date, so without special
+// handling that morning punch looks like a brand-new check-in for the new
+// date, leaving yesterday's row stuck on "No checkout" and creating a
+// bogus extra row today. To fix this: if an employee has an unclosed
+// check-in from the PREVIOUS local (Asia/Karachi) date, and this new punch
+// arrives in the early hours (before noon) within a plausible shift length
+// of that check-in, treat it as the check-out for yesterday's row instead
+// of a new check-in for today.
+const OVERNIGHT_MAX_GAP_MS = 16 * 60 * 60 * 1000; // 16 hours
+const OVERNIGHT_CUTOFF_LOCAL_HOUR = 12; // punches before local noon are candidates
+const PKT_OFFSET_MS = 5 * 60 * 60 * 1000; // Asia/Karachi = UTC+5, no DST
+
+function toLocalParts(d) {
+  const local = new Date(d.getTime() + PKT_OFFSET_MS);
+  return {
+    dateStr: local.toISOString().slice(0, 10),
+    hour: local.getUTCHours(),
+  };
+}
+function prevDateStr(dateStr) {
+  const d = new Date(dateStr + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+// --------------------------------------------------------------------------
+
 // Normalize the base URL: strip trailing slashes AND strip a trailing
 // "/rest/v1" if someone pasted the REST endpoint instead of the bare
 // project URL. This makes supabaseFetch immune to either being stored
@@ -59,7 +87,7 @@ async function supabaseFetch(path, options = {}) {
 }
 
 function toDateStr(d) {
-  return d.toISOString().slice(0, 10); // YYYY-MM-DD
+  return toLocalParts(d).dateStr; // local (Asia/Karachi) calendar date, not UTC
 }
 
 // Build the employees.id used for a given device PIN.
@@ -92,18 +120,47 @@ async function autoCreateEmployee(zkUserId, deviceName) {
   return id;
 }
 
-// Apply one punch to today's/that day's attendance row using the agreed rules:
-// - no row yet -> this punch is check_in
-// - row has check_in but no check_out ->
-//     - if this punch is at least MIN_CHECKOUT_GAP_MS after check_in, it's check_out
-//     - otherwise it's a duplicate/double-scan of the check-in, ignore it
-// - row already has both -> duplicate, ignore
-async function applyPunch(employeeId, punchTime) {
-  const dateStr = toDateStr(punchTime);
-  const existing = await supabaseFetch(
+async function getAttendanceRow(employeeId, dateStr) {
+  const rows = await supabaseFetch(
     `attendance?employee_id=eq.${encodeURIComponent(employeeId)}&date=eq.${dateStr}&select=employee_id,date,check_in,check_out`
   );
-  const row = existing && existing[0];
+  return rows && rows[0];
+}
+
+// Apply one punch to the correct attendance row using the agreed rules:
+// - if yesterday's row is still open (check_in, no check_out) and this
+//   punch lands in the early hours within a plausible shift length of that
+//   check_in -> it's the check-out for YESTERDAY's row (overnight shift)
+// - else, no row yet for today -> this punch is check_in
+// - else, today's row has check_in but no check_out ->
+//     - if this punch is at least MIN_CHECKOUT_GAP_MS after check_in, it's check_out
+//     - otherwise it's a duplicate/double-scan of the check-in, ignore it
+// - else, today's row already has both -> duplicate, ignore
+async function applyPunch(employeeId, punchTime) {
+  const { dateStr, hour } = toLocalParts(punchTime);
+
+  // --- Overnight-shift check: does yesterday have an open shift this punch could be closing? ---
+  if (hour < OVERNIGHT_CUTOFF_LOCAL_HOUR) {
+    const yDateStr = prevDateStr(dateStr);
+    const yRow = await getAttendanceRow(employeeId, yDateStr);
+    if (yRow && yRow.check_in && !yRow.check_out) {
+      const gapMs = punchTime.getTime() - new Date(yRow.check_in).getTime();
+      if (gapMs >= MIN_CHECKOUT_GAP_MS && gapMs <= OVERNIGHT_MAX_GAP_MS) {
+        await supabaseFetch(
+          `attendance?employee_id=eq.${encodeURIComponent(employeeId)}&date=eq.${yDateStr}`,
+          {
+            method: "PATCH",
+            prefer: "return=minimal",
+            body: JSON.stringify({ check_out: punchTime.toISOString() }),
+          }
+        );
+        return "overnight_check_out_recorded";
+      }
+    }
+  }
+  // --------------------------------------------------------------------------
+
+  const row = await getAttendanceRow(employeeId, dateStr);
 
   if (!row) {
     await supabaseFetch("attendance", {
