@@ -9,7 +9,7 @@ export function todayStr(d = new Date()) {
 }
 export function fmtTime(d) {
   if (!d) return "—";
-  return new Date(d).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Karachi" });
+  return new Date(d).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Karachi" });
 }
 export function fmtHrs(h) {
   if (h == null) return "—";
