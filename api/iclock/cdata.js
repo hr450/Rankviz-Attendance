@@ -17,31 +17,36 @@
 // as normal. What changes is that any device write resets
 // manually_edited back to false (and clears edited_by/edited_at), since
 // the row's current value once again reflects the device rather than
-// HR's correction. This keeps the row always up to date from whichever
-// source wrote to it last, while manually_edited tells you which source
-// that was at any given moment.
+// HR's correction.
+//
+// PUNCH CLASSIFICATION (in priority order):
+//   1. Hard time-of-day rules — these win no matter what:
+//        - hour >= EVENING_CHECKIN_HOUR (8 PM)  -> always a check-in
+//        - hour === MORNING_CHECKOUT_HOUR (5 AM) -> always a check-out
+//   2. Overnight-shift window — an early-morning punch (before noon, but
+//      not exactly 5 AM, which rule 1 already covers) can close an
+//      unclosed check-in from the previous day if the gap is plausible.
+//   3. Normal same-day logic — the FIRST punch of the day is check_in.
+//      A second punch is check_out if it's later than check_in, but if it
+//      turns out to be EARLIER than the stored check_in (e.g. punches
+//      arrived out of order during a historical backfill), it's treated
+//      as the real check_in and the old value is shifted into check_out.
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-// Minimum gap (ms) between check-in and a later punch for that later punch
-// to count as a real check-out. Anything closer than this is treated as a
-// duplicate/double-scan and ignored, leaving check_out empty until a real
-// end-of-day punch comes in.
+// Minimum gap (ms) between two punches for the later one to count as a
+// distinct event rather than a duplicate/double-scan of the same event.
 const MIN_CHECKOUT_GAP_MS = 60 * 1000; // 1 minute
 
-// --- Overnight-shift handling -------------------------------------------
-// Night-shift staff check in in the evening and check out after midnight.
-// Attendance is stored one row per calendar date, so without special
-// handling that morning punch looks like a brand-new check-in for the new
-// date, leaving yesterday's row stuck on "No checkout" and creating a
-// bogus extra row today. To fix this: if an employee has an unclosed
-// check-in from the PREVIOUS local (Asia/Karachi) date, and this new punch
-// arrives in the early hours (before noon) within a plausible shift length
-// of that check-in, treat it as the check-out for yesterday's row instead
-// of a new check-in for today.
+// --- Hard time-of-day rules ----------------------------------------------
+const EVENING_CHECKIN_HOUR = 20; // 8:00 PM local — punches at/after this hour are ALWAYS a check-in
+const MORNING_CHECKOUT_HOUR = 5; // 5:00 AM local (the 5:xx hour) — ALWAYS a check-out
+// --------------------------------------------------------------------------
+
+// --- Overnight-shift window (for early hours other than the hard 5 AM rule) ---
 const OVERNIGHT_MAX_GAP_MS = 16 * 60 * 60 * 1000; // 16 hours
-const OVERNIGHT_CUTOFF_LOCAL_HOUR = 12; // punches before local noon are candidates
+const OVERNIGHT_CUTOFF_LOCAL_HOUR = 12; // punches before local noon are candidates to close yesterday's shift
 const PKT_OFFSET_MS = 5 * 60 * 60 * 1000; // Asia/Karachi = UTC+5, no DST
 
 function toLocalParts(d) {
@@ -67,15 +72,11 @@ const DEVICE_WRITE_RESET_FIELDS = {
   edited_at: null,
 };
 
-// Normalize the base URL: strip trailing slashes AND strip a trailing
-// "/rest/v1" if someone pasted the REST endpoint instead of the bare
-// project URL. This makes supabaseFetch immune to either being stored
-// in the env var.
 function getSupabaseBaseUrl() {
   let base = (SUPABASE_URL || "").trim();
-  base = base.replace(/\/+$/, ""); // strip trailing slash(es)
-  base = base.replace(/\/rest\/v1$/i, ""); // strip trailing /rest/v1 if present
-  base = base.replace(/\/+$/, ""); // strip trailing slash(es) again, just in case
+  base = base.replace(/\/+$/, "");
+  base = base.replace(/\/rest\/v1$/i, "");
+  base = base.replace(/\/+$/, "");
   return base;
 }
 
@@ -105,16 +106,10 @@ async function supabaseFetch(path, options = {}) {
   }
 }
 
-function toDateStr(d) {
-  return toLocalParts(d).dateStr; // local (Asia/Karachi) calendar date, not UTC
-}
-
-// Build the employees.id used for a given device PIN.
 function zkIdToEmployeeId(zkUserId) {
   return `emp_zk${zkUserId}`;
 }
 
-// Find employee by their device fingerprint PIN, via the encoded id column.
 async function findEmployeeByZkId(zkUserId) {
   const empId = zkIdToEmployeeId(zkUserId);
   const rows = await supabaseFetch(
@@ -123,8 +118,6 @@ async function findEmployeeByZkId(zkUserId) {
   return rows && rows[0] ? rows[0] : null;
 }
 
-// Auto-create a bare employee record from a new fingerprint enrollment.
-// HR fills in the real name/department/etc later in the web app.
 async function autoCreateEmployee(zkUserId, deviceName) {
   const id = zkIdToEmployeeId(zkUserId);
   await supabaseFetch("employees", {
@@ -146,24 +139,100 @@ async function getAttendanceRow(employeeId, dateStr) {
   return rows && rows[0];
 }
 
-// Apply one punch to the correct attendance row using the agreed rules:
-// - if yesterday's row is still open (check_in, no check_out) and this
-//   punch lands in the early hours within a plausible shift length of that
-//   check_in -> it's the check-out for YESTERDAY's row (overnight shift)
-// - else, no row yet for today -> this punch is check_in
-// - else, today's row has check_in but no check_out ->
-//     - if this punch is at least MIN_CHECKOUT_GAP_MS after check_in, it's check_out
-//     - otherwise it's a duplicate/double-scan of the check-in, ignore it
-// - else, today's row already has both -> duplicate, ignore
-//
-// A device punch is always allowed to write, even if the row was
-// previously manually edited by HR. When it does write, it resets
-// manually_edited/edited_by/edited_at so the row reflects that the
-// device is now the source of the current value.
+// Record `punchTime` as a check-in for `dateStr`. If today already has a
+// check-in, this is treated as a duplicate scan rather than overwritten.
+async function recordCheckIn(employeeId, dateStr, punchTime) {
+  const row = await getAttendanceRow(employeeId, dateStr);
+
+  if (!row) {
+    await supabaseFetch("attendance", {
+      method: "POST",
+      prefer: "return=minimal",
+      body: JSON.stringify({
+        employee_id: employeeId,
+        date: dateStr,
+        check_in: punchTime.toISOString(),
+        source: "device",
+        type: "office",
+        ...DEVICE_WRITE_RESET_FIELDS,
+      }),
+    });
+    return "check_in_recorded";
+  }
+
+  if (!row.check_in) {
+    await supabaseFetch(
+      `attendance?employee_id=eq.${encodeURIComponent(employeeId)}&date=eq.${dateStr}`,
+      {
+        method: "PATCH",
+        prefer: "return=minimal",
+        body: JSON.stringify({ check_in: punchTime.toISOString(), ...DEVICE_WRITE_RESET_FIELDS }),
+      }
+    );
+    return "check_in_recorded";
+  }
+
+  return "duplicate_ignored";
+}
+
+// Record `punchTime` as a check-out. Prefers closing an unclosed check-in
+// from YESTERDAY (overnight shift ending in the early morning); falls back
+// to closing an unclosed check-in from TODAY; if neither exists, the punch
+// is logged and dropped rather than inventing a row for it.
+async function recordCheckOut(employeeId, dateStr, punchTime) {
+  const yDateStr = prevDateStr(dateStr);
+  const yRow = await getAttendanceRow(employeeId, yDateStr);
+  if (yRow && yRow.check_in && !yRow.check_out) {
+    const gapMs = punchTime.getTime() - new Date(yRow.check_in).getTime();
+    if (gapMs >= MIN_CHECKOUT_GAP_MS) {
+      await supabaseFetch(
+        `attendance?employee_id=eq.${encodeURIComponent(employeeId)}&date=eq.${yDateStr}`,
+        {
+          method: "PATCH",
+          prefer: "return=minimal",
+          body: JSON.stringify({ check_out: punchTime.toISOString(), ...DEVICE_WRITE_RESET_FIELDS }),
+        }
+      );
+      return "overnight_check_out_recorded";
+    }
+  }
+
+  const row = await getAttendanceRow(employeeId, dateStr);
+  if (row && row.check_in && !row.check_out) {
+    const gapMs = punchTime.getTime() - new Date(row.check_in).getTime();
+    if (gapMs >= MIN_CHECKOUT_GAP_MS) {
+      await supabaseFetch(
+        `attendance?employee_id=eq.${encodeURIComponent(employeeId)}&date=eq.${dateStr}`,
+        {
+          method: "PATCH",
+          prefer: "return=minimal",
+          body: JSON.stringify({ check_out: punchTime.toISOString(), ...DEVICE_WRITE_RESET_FIELDS }),
+        }
+      );
+      return "check_out_recorded";
+    }
+    return "duplicate_ignored";
+  }
+
+  console.log(
+    `zkteco: 5am check-out punch for ${employeeId} on ${dateStr} had no open check-in to close — ignored`
+  );
+  return "unmatched_checkout_ignored";
+}
+
 async function applyPunch(employeeId, punchTime) {
   const { dateStr, hour } = toLocalParts(punchTime);
 
-  // --- Overnight-shift check: does yesterday have an open shift this punch could be closing? ---
+  // --- Rule 1: hard time-of-day overrides, checked first, always win ---
+  if (hour >= EVENING_CHECKIN_HOUR) {
+    return await recordCheckIn(employeeId, dateStr, punchTime);
+  }
+  if (hour === MORNING_CHECKOUT_HOUR) {
+    return await recordCheckOut(employeeId, dateStr, punchTime);
+  }
+  // ------------------------------------------------------------------------
+
+  // --- Rule 2: overnight-shift window for other early hours ---------------
   if (hour < OVERNIGHT_CUTOFF_LOCAL_HOUR) {
     const yDateStr = prevDateStr(dateStr);
     const yRow = await getAttendanceRow(employeeId, yDateStr);
@@ -187,6 +256,7 @@ async function applyPunch(employeeId, punchTime) {
   }
   // --------------------------------------------------------------------------
 
+  // --- Rule 3: normal same-day logic, order-corrected ---------------------
   const row = await getAttendanceRow(employeeId, dateStr);
 
   if (!row) {
@@ -208,33 +278,51 @@ async function applyPunch(employeeId, punchTime) {
   if (row.check_in && !row.check_out) {
     const checkInTime = new Date(row.check_in);
     const gapMs = punchTime.getTime() - checkInTime.getTime();
+    const absGapMs = Math.abs(gapMs);
 
-    if (gapMs < MIN_CHECKOUT_GAP_MS) {
-      // Same/near-identical punch as check-in (double-scan) -> not a real
-      // check-out. Leave check_out empty until a genuine later punch comes in.
+    if (absGapMs < MIN_CHECKOUT_GAP_MS) {
+      // Same/near-identical punch as check-in (double-scan).
       return "duplicate_ignored";
     }
 
+    if (gapMs > 0) {
+      // Later than the stored check_in -> genuinely a check-out.
+      await supabaseFetch(
+        `attendance?employee_id=eq.${encodeURIComponent(employeeId)}&date=eq.${dateStr}`,
+        {
+          method: "PATCH",
+          prefer: "return=minimal",
+          body: JSON.stringify({
+            check_out: punchTime.toISOString(),
+            ...DEVICE_WRITE_RESET_FIELDS,
+          }),
+        }
+      );
+      return "check_out_recorded";
+    }
+
+    // Earlier than the stored check_in -> this punch actually happened
+    // first (e.g. arrived out of order from a historical backfill). It's
+    // the real check_in; shift the old value into check_out.
     await supabaseFetch(
       `attendance?employee_id=eq.${encodeURIComponent(employeeId)}&date=eq.${dateStr}`,
       {
         method: "PATCH",
         prefer: "return=minimal",
         body: JSON.stringify({
-          check_out: punchTime.toISOString(),
+          check_in: punchTime.toISOString(),
+          check_out: row.check_in,
           ...DEVICE_WRITE_RESET_FIELDS,
         }),
       }
     );
-    return "check_out_recorded";
+    return "check_in_corrected_out_of_order";
   }
 
-  // Already has both check_in and check_out -> duplicate punch, ignore per your rule
+  // Already has both check_in and check_out -> duplicate punch, ignore.
   return "duplicate_ignored";
 }
 
-// Parse ATTLOG body: one punch per line, tab-separated: PIN\tTimestamp\tStatus\t...
-// Tracks per-line failures so one bad row can't silently swallow the rest.
 async function handleAttlog(body) {
   const lines = body.split("\n").map((l) => l.trim()).filter(Boolean);
   let processed = 0;
@@ -269,7 +357,6 @@ async function handleAttlog(body) {
   return { processed, total: lines.length, errors };
 }
 
-// Parse OPERLOG body: includes lines like "USER PIN=123\tName=John\t..."
 async function handleOperlog(body) {
   const lines = body.split("\n").map((l) => l.trim()).filter(Boolean);
   for (const line of lines) {
@@ -292,7 +379,6 @@ async function handleOperlog(body) {
 }
 
 export default async function handler(req, res) {
-  // Allow the browser-based history upload tool (and any other client) to call this endpoint.
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -308,7 +394,6 @@ export default async function handler(req, res) {
     return;
   }
 
-  // Device sends a GET first as a handshake/options check.
   if (req.method === "GET") {
     res.status(200).send("OK");
     return;
@@ -328,10 +413,8 @@ export default async function handler(req, res) {
       } else {
         console.log(`zkteco cdata: unrecognized table param "${table}", ignoring body`);
       }
-      // Devices expect a plain "OK" response, not JSON.
       res.status(200).send("OK");
     } catch (err) {
-      // Log the REAL reason clearly, but still ack "OK" so the device doesn't retry-storm.
       console.error("zkteco cdata error:", err.message, err.stack);
       res.status(200).send("OK");
     }
