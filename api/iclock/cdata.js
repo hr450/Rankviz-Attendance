@@ -10,6 +10,16 @@
 // The device's numeric PIN is encoded directly into the employees.id field,
 // e.g. device PIN 1001 -> employees.id = "emp_zk1001".
 // So "look up by zk id" means "look up employees.id = emp_zk<PIN>".
+//
+// MANUAL EDITS: HR can hand-correct a row via /api/attendance/edit, which
+// sets manually_edited = true, edited_by, edited_at. Device punches are
+// NOT blocked by this — a later punch still updates check_in/check_out
+// as normal. What changes is that any device write resets
+// manually_edited back to false (and clears edited_by/edited_at), since
+// the row's current value once again reflects the device rather than
+// HR's correction. This keeps the row always up to date from whichever
+// source wrote to it last, while manually_edited tells you which source
+// that was at any given moment.
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -47,6 +57,15 @@ function prevDateStr(dateStr) {
   return d.toISOString().slice(0, 10);
 }
 // --------------------------------------------------------------------------
+
+// Fields written whenever a DEVICE punch updates a row. Resetting these
+// alongside check_in/check_out marks the row as reflecting the device
+// again, not a prior manual correction.
+const DEVICE_WRITE_RESET_FIELDS = {
+  manually_edited: false,
+  edited_by: null,
+  edited_at: null,
+};
 
 // Normalize the base URL: strip trailing slashes AND strip a trailing
 // "/rest/v1" if someone pasted the REST endpoint instead of the bare
@@ -122,7 +141,7 @@ async function autoCreateEmployee(zkUserId, deviceName) {
 
 async function getAttendanceRow(employeeId, dateStr) {
   const rows = await supabaseFetch(
-    `attendance?employee_id=eq.${encodeURIComponent(employeeId)}&date=eq.${dateStr}&select=employee_id,date,check_in,check_out`
+    `attendance?employee_id=eq.${encodeURIComponent(employeeId)}&date=eq.${dateStr}&select=employee_id,date,check_in,check_out,manually_edited`
   );
   return rows && rows[0];
 }
@@ -136,6 +155,11 @@ async function getAttendanceRow(employeeId, dateStr) {
 //     - if this punch is at least MIN_CHECKOUT_GAP_MS after check_in, it's check_out
 //     - otherwise it's a duplicate/double-scan of the check-in, ignore it
 // - else, today's row already has both -> duplicate, ignore
+//
+// A device punch is always allowed to write, even if the row was
+// previously manually edited by HR. When it does write, it resets
+// manually_edited/edited_by/edited_at so the row reflects that the
+// device is now the source of the current value.
 async function applyPunch(employeeId, punchTime) {
   const { dateStr, hour } = toLocalParts(punchTime);
 
@@ -151,7 +175,10 @@ async function applyPunch(employeeId, punchTime) {
           {
             method: "PATCH",
             prefer: "return=minimal",
-            body: JSON.stringify({ check_out: punchTime.toISOString() }),
+            body: JSON.stringify({
+              check_out: punchTime.toISOString(),
+              ...DEVICE_WRITE_RESET_FIELDS,
+            }),
           }
         );
         return "overnight_check_out_recorded";
@@ -172,6 +199,7 @@ async function applyPunch(employeeId, punchTime) {
         check_in: punchTime.toISOString(),
         source: "device",
         type: "office",
+        ...DEVICE_WRITE_RESET_FIELDS,
       }),
     });
     return "check_in_recorded";
@@ -192,7 +220,10 @@ async function applyPunch(employeeId, punchTime) {
       {
         method: "PATCH",
         prefer: "return=minimal",
-        body: JSON.stringify({ check_out: punchTime.toISOString() }),
+        body: JSON.stringify({
+          check_out: punchTime.toISOString(),
+          ...DEVICE_WRITE_RESET_FIELDS,
+        }),
       }
     );
     return "check_out_recorded";
