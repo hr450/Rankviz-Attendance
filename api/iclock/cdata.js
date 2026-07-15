@@ -237,7 +237,10 @@ async function applyPunch(employeeId, punchTime) {
     return await recordCheckIn(employeeId, dateStr, punchTime);
   }
 
-  // --- Rule 2: early-morning punch (5am hour) — context-aware -------------
+  // --- Rule 2: early-morning punch (5am hour) — ALWAYS a checkout ---------
+  // Business rule: night shift always ends around 5am, so a 5am punch is
+  // never a check-in. If there's nothing open to close (yesterday or
+  // today), the punch is dropped rather than starting a bogus check-in.
   if (hour === MORNING_HOUR) {
     const yDateStr = prevDateStr(dateStr);
     const yResult = await closeOpenCheckIn(employeeId, yDateStr, punchTime);
@@ -248,8 +251,12 @@ async function applyPunch(employeeId, punchTime) {
     if (tResult === "closed") return "check_out_recorded";
     if (tResult === "duplicate") return "duplicate_ignored";
 
-    // Nothing open to close on either day -> treat as a genuine early check-in.
-    return await recordCheckIn(employeeId, dateStr, punchTime);
+    // Nothing open to close on either day -> drop the punch, do NOT
+    // create a check-in at 5am.
+    console.log(
+      `zkteco: 5am punch for ${employeeId} on ${dateStr} had no open check-in to close — ignored`
+    );
+    return "unmatched_checkout_ignored";
   }
 
   // --- Rule 3: overnight-shift window for other early hours ---------------
