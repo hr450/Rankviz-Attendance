@@ -19,18 +19,34 @@
 // the row's current value once again reflects the device rather than
 // HR's correction.
 //
+// SHIFT PATTERNS: there are two shifts — day (~9am-6pm) and night
+// (~8pm-5am) — and day-shift staff who arrive late (e.g. after 12pm) can
+// still check out as late as 8-10pm, which overlaps the night shift's
+// check-in window. So evening/early-morning punches are classified
+// CONTEXT-AWARE, not by a fixed hour cutoff alone:
+//
 // PUNCH CLASSIFICATION (in priority order):
-//   1. Hard time-of-day rules — these win no matter what:
-//        - hour >= EVENING_CHECKIN_HOUR (8 PM)  -> always a check-in
-//        - hour === MORNING_CHECKOUT_HOUR (5 AM) -> always a check-out
-//   2. Overnight-shift window — an early-morning punch (before noon, but
-//      not exactly 5 AM, which rule 1 already covers) can close an
-//      unclosed check-in from the previous day if the gap is plausible.
-//   3. Normal same-day logic — the FIRST punch of the day is check_in.
-//      A second punch is check_out if it's later than check_in, but if it
-//      turns out to be EARLIER than the stored check_in (e.g. punches
-//      arrived out of order during a historical backfill), it's treated
-//      as the real check_in and the old value is shifted into check_out.
+//   1. Evening punch (hour >= EVENING_HOUR, 8pm+):
+//        - If there's already an open check-in from EARLIER TODAY
+//          (e.g. a 1:28pm day-shift check-in), this punch closes it as
+//          check-out — no matter how late it is.
+//        - Otherwise (nothing open yet today), it's a genuine night-shift
+//          check-in.
+//   2. Early-morning punch (hour === MORNING_HOUR, the 5am hour):
+//        - Try closing an open check-in from YESTERDAY first (the normal
+//          night-shift-ending case).
+//        - If yesterday has nothing open, try closing an open check-in
+//          from TODAY (a same-day early finish).
+//        - If neither exists, treat it as a genuine early check-in for
+//          today rather than dropping the punch.
+//   3. Overnight-shift window — for other early hours (before noon, not
+//      hour 5), an open check-in from yesterday can still be closed if
+//      the gap is plausible (existing behavior, unchanged).
+//   4. Normal same-day logic — the FIRST punch of the day is check_in. A
+//      second punch is check_out if later than check_in; if it's
+//      EARLIER than the stored check_in (e.g. punches arrived out of
+//      order during a historical backfill), it's treated as the real
+//      check_in and the old value shifts into check_out.
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -39,21 +55,29 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 // distinct event rather than a duplicate/double-scan of the same event.
 const MIN_CHECKOUT_GAP_MS = 60 * 1000; // 1 minute
 
-// --- Hard time-of-day rules ----------------------------------------------
-const EVENING_CHECKIN_HOUR = 20; // 8:00 PM local — punches at/after this hour are ALWAYS a check-in
-const MORNING_CHECKOUT_HOUR = 5; // 5:00 AM local (the 5:xx hour) — ALWAYS a check-out
+// --- Evening / early-morning windows (context-aware, see notes above) ---
+const EVENING_HOUR = 20; // 8:00 PM local
+const MORNING_HOUR = 5; // 5:00 AM local (the 5:xx hour)
 // --------------------------------------------------------------------------
 
-// --- Overnight-shift window (for early hours other than the hard 5 AM rule) ---
+// --- Overnight-shift window (for early hours other than the 5 AM hour) ---
 const OVERNIGHT_MAX_GAP_MS = 16 * 60 * 60 * 1000; // 16 hours
 const OVERNIGHT_CUTOFF_LOCAL_HOUR = 12; // punches before local noon are candidates to close yesterday's shift
-const PKT_OFFSET_MS = 5 * 60 * 60 * 1000; // Asia/Karachi = UTC+5, no DST
 
+// NOTE: the device timestamp ("YYYY-MM-DD HH:MM:SS") is ALREADY Asia/Karachi
+// local time. `new Date(timeStr.replace(" ", "T"))` has no timezone
+// designator, so on this (UTC) server it gets parsed with those same digits
+// but labeled as UTC. That mislabeling is harmless for computing gaps
+// between two punches (both are off by the same constant amount, so
+// differences are still correct) — but it means the Date object's UTC
+// getters ALREADY give us the real local hour/date. We must NOT add a PKT
+// offset on top of that, or we double-shift by +5h, which rolls the date
+// forward for any punch at/after 7pm local and silently misfiles it under
+// tomorrow's date once the punch-classification rules can't recover it.
 function toLocalParts(d) {
-  const local = new Date(d.getTime() + PKT_OFFSET_MS);
   return {
-    dateStr: local.toISOString().slice(0, 10),
-    hour: local.getUTCHours(),
+    dateStr: d.toISOString().slice(0, 10),
+    hour: d.getUTCHours(),
   };
 }
 function prevDateStr(dateStr) {
@@ -139,6 +163,32 @@ async function getAttendanceRow(employeeId, dateStr) {
   return rows && rows[0];
 }
 
+// Try to close an open check-in (check_in set, check_out null) on the row
+// for `dateStr`. Returns "closed", "duplicate" (punch too close to
+// check_in to be real), or "none" (no open check-in to close).
+async function closeOpenCheckIn(employeeId, dateStr, punchTime) {
+  const row = await getAttendanceRow(employeeId, dateStr);
+  if (row && row.check_in && !row.check_out) {
+    const gapMs = punchTime.getTime() - new Date(row.check_in).getTime();
+    if (gapMs >= MIN_CHECKOUT_GAP_MS) {
+      await supabaseFetch(
+        `attendance?employee_id=eq.${encodeURIComponent(employeeId)}&date=eq.${dateStr}`,
+        {
+          method: "PATCH",
+          prefer: "return=minimal",
+          body: JSON.stringify({
+            check_out: punchTime.toISOString(),
+            ...DEVICE_WRITE_RESET_FIELDS,
+          }),
+        }
+      );
+      return "closed";
+    }
+    return "duplicate";
+  }
+  return "none";
+}
+
 // Record `punchTime` as a check-in for `dateStr`. If today already has a
 // check-in, this is treated as a duplicate scan rather than overwritten.
 async function recordCheckIn(employeeId, dateStr, punchTime) {
@@ -175,64 +225,34 @@ async function recordCheckIn(employeeId, dateStr, punchTime) {
   return "duplicate_ignored";
 }
 
-// Record `punchTime` as a check-out. Prefers closing an unclosed check-in
-// from YESTERDAY (overnight shift ending in the early morning); falls back
-// to closing an unclosed check-in from TODAY; if neither exists, the punch
-// is logged and dropped rather than inventing a row for it.
-async function recordCheckOut(employeeId, dateStr, punchTime) {
-  const yDateStr = prevDateStr(dateStr);
-  const yRow = await getAttendanceRow(employeeId, yDateStr);
-  if (yRow && yRow.check_in && !yRow.check_out) {
-    const gapMs = punchTime.getTime() - new Date(yRow.check_in).getTime();
-    if (gapMs >= MIN_CHECKOUT_GAP_MS) {
-      await supabaseFetch(
-        `attendance?employee_id=eq.${encodeURIComponent(employeeId)}&date=eq.${yDateStr}`,
-        {
-          method: "PATCH",
-          prefer: "return=minimal",
-          body: JSON.stringify({ check_out: punchTime.toISOString(), ...DEVICE_WRITE_RESET_FIELDS }),
-        }
-      );
-      return "overnight_check_out_recorded";
-    }
-  }
-
-  const row = await getAttendanceRow(employeeId, dateStr);
-  if (row && row.check_in && !row.check_out) {
-    const gapMs = punchTime.getTime() - new Date(row.check_in).getTime();
-    if (gapMs >= MIN_CHECKOUT_GAP_MS) {
-      await supabaseFetch(
-        `attendance?employee_id=eq.${encodeURIComponent(employeeId)}&date=eq.${dateStr}`,
-        {
-          method: "PATCH",
-          prefer: "return=minimal",
-          body: JSON.stringify({ check_out: punchTime.toISOString(), ...DEVICE_WRITE_RESET_FIELDS }),
-        }
-      );
-      return "check_out_recorded";
-    }
-    return "duplicate_ignored";
-  }
-
-  console.log(
-    `zkteco: 5am check-out punch for ${employeeId} on ${dateStr} had no open check-in to close — ignored`
-  );
-  return "unmatched_checkout_ignored";
-}
-
 async function applyPunch(employeeId, punchTime) {
   const { dateStr, hour } = toLocalParts(punchTime);
 
-  // --- Rule 1: hard time-of-day overrides, checked first, always win ---
-  if (hour >= EVENING_CHECKIN_HOUR) {
+  // --- Rule 1: evening punch (8pm+) — context-aware -----------------------
+  if (hour >= EVENING_HOUR) {
+    const result = await closeOpenCheckIn(employeeId, dateStr, punchTime);
+    if (result === "closed") return "check_out_recorded";
+    if (result === "duplicate") return "duplicate_ignored";
+    // Nothing open yet today -> this is a genuine night-shift check-in.
     return await recordCheckIn(employeeId, dateStr, punchTime);
   }
-  if (hour === MORNING_CHECKOUT_HOUR) {
-    return await recordCheckOut(employeeId, dateStr, punchTime);
-  }
-  // ------------------------------------------------------------------------
 
-  // --- Rule 2: overnight-shift window for other early hours ---------------
+  // --- Rule 2: early-morning punch (5am hour) — context-aware -------------
+  if (hour === MORNING_HOUR) {
+    const yDateStr = prevDateStr(dateStr);
+    const yResult = await closeOpenCheckIn(employeeId, yDateStr, punchTime);
+    if (yResult === "closed") return "overnight_check_out_recorded";
+    if (yResult === "duplicate") return "duplicate_ignored";
+
+    const tResult = await closeOpenCheckIn(employeeId, dateStr, punchTime);
+    if (tResult === "closed") return "check_out_recorded";
+    if (tResult === "duplicate") return "duplicate_ignored";
+
+    // Nothing open to close on either day -> treat as a genuine early check-in.
+    return await recordCheckIn(employeeId, dateStr, punchTime);
+  }
+
+  // --- Rule 3: overnight-shift window for other early hours ---------------
   if (hour < OVERNIGHT_CUTOFF_LOCAL_HOUR) {
     const yDateStr = prevDateStr(dateStr);
     const yRow = await getAttendanceRow(employeeId, yDateStr);
@@ -256,7 +276,7 @@ async function applyPunch(employeeId, punchTime) {
   }
   // --------------------------------------------------------------------------
 
-  // --- Rule 3: normal same-day logic, order-corrected ---------------------
+  // --- Rule 4: normal same-day logic, order-corrected ----------------------
   const row = await getAttendanceRow(employeeId, dateStr);
 
   if (!row) {
