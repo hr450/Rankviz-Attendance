@@ -8,6 +8,8 @@
 //     date: "2026-07-13",           // required, YYYY-MM-DD
 //     check_in: "2026-07-13T09:18:00.000Z"  | null,  // ISO string or null to clear
 //     check_out: "2026-07-13T18:09:00.000Z" | null,
+//     second_check_in: "2026-07-13T15:30:00.000Z" | null,  // split-shift 2nd session
+//     second_check_out: "2026-07-13T18:30:00.000Z" | null,
 //     notes: "Forgot to check out, corrected by HR", // optional
 //     edited_by: "tehzeeb zahra"    // required — who made the change, for the audit trail
 //   }
@@ -15,6 +17,10 @@
 // This always marks the row manually_edited = true, which cdata.js checks
 // before letting a device punch overwrite check_in/check_out (see the
 // PATCH note for cdata.js).
+//
+// second_check_in / second_check_out are optional — omit them entirely
+// (don't send the key) to leave the second session untouched. Send them
+// explicitly as null to clear that session.
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -54,13 +60,25 @@ async function supabaseFetch(path, options = {}) {
 
 async function getAttendanceRow(employeeId, dateStr) {
   const rows = await supabaseFetch(
-    `attendance?employee_id=eq.${encodeURIComponent(employeeId)}&date=eq.${dateStr}&select=employee_id,date,check_in,check_out`
+    `attendance?employee_id=eq.${encodeURIComponent(employeeId)}&date=eq.${dateStr}&select=employee_id,date,check_in,check_out,second_check_in,second_check_out`
   );
   return rows && rows[0];
 }
 
 function isValidDateStr(s) {
   return typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
+}
+
+// Parses one punch field. Returns { ok, date, provided } — `provided` is
+// false when the key was omitted from the request body entirely (meaning
+// "leave this field alone"), as opposed to explicitly sent as null.
+function parsePunchField(body, key) {
+  if (!(key in body)) return { ok: true, date: undefined, provided: false };
+  const raw = body[key];
+  if (raw === null || raw === "") return { ok: true, date: null, provided: true };
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return { ok: false, date: null, provided: true };
+  return { ok: true, date: d, provided: true };
 }
 
 export default async function handler(req, res) {
@@ -75,7 +93,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { employee_id, date, check_in, check_out, notes, edited_by } = req.body || {};
+    const body = req.body || {};
+    const { employee_id, date, notes, edited_by } = body;
 
     // --- Validation ---
     if (!employee_id) {
@@ -91,25 +110,27 @@ export default async function handler(req, res) {
       return;
     }
 
-    let checkInDate = null;
-    let checkOutDate = null;
+    const checkIn = parsePunchField(body, "check_in");
+    const checkOut = parsePunchField(body, "check_out");
+    const secondCheckIn = parsePunchField(body, "second_check_in");
+    const secondCheckOut = parsePunchField(body, "second_check_out");
 
-    if (check_in) {
-      checkInDate = new Date(check_in);
-      if (isNaN(checkInDate.getTime())) {
-        res.status(400).json({ error: "check_in is not a valid date/time" });
+    for (const [name, f] of [
+      ["check_in", checkIn], ["check_out", checkOut],
+      ["second_check_in", secondCheckIn], ["second_check_out", secondCheckOut],
+    ]) {
+      if (!f.ok) {
+        res.status(400).json({ error: `${name} is not a valid date/time` });
         return;
       }
     }
-    if (check_out) {
-      checkOutDate = new Date(check_out);
-      if (isNaN(checkOutDate.getTime())) {
-        res.status(400).json({ error: "check_out is not a valid date/time" });
-        return;
-      }
-    }
-    if (checkInDate && checkOutDate && checkOutDate.getTime() <= checkInDate.getTime()) {
+
+    if (checkIn.date && checkOut.date && checkOut.date.getTime() <= checkIn.date.getTime()) {
       res.status(400).json({ error: "check_out must be after check_in" });
+      return;
+    }
+    if (secondCheckIn.date && secondCheckOut.date && secondCheckOut.date.getTime() <= secondCheckIn.date.getTime()) {
+      res.status(400).json({ error: "second_check_out must be after second_check_in" });
       return;
     }
 
@@ -121,12 +142,16 @@ export default async function handler(req, res) {
     }
 
     const payload = {
-      check_in: checkInDate ? checkInDate.toISOString() : null,
-      check_out: checkOutDate ? checkOutDate.toISOString() : null,
       manually_edited: true,
       edited_by,
       edited_at: new Date().toISOString(),
     };
+    // Only touch fields the caller actually sent, so a request that edits
+    // just the second session doesn't wipe out the first (or vice versa).
+    if (checkIn.provided) payload.check_in = checkIn.date ? checkIn.date.toISOString() : null;
+    if (checkOut.provided) payload.check_out = checkOut.date ? checkOut.date.toISOString() : null;
+    if (secondCheckIn.provided) payload.second_check_in = secondCheckIn.date ? secondCheckIn.date.toISOString() : null;
+    if (secondCheckOut.provided) payload.second_check_out = secondCheckOut.date ? secondCheckOut.date.toISOString() : null;
     if (typeof notes === "string") payload.notes = notes;
 
     const existing = await getAttendanceRow(employee_id, date);

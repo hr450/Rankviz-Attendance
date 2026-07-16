@@ -89,6 +89,9 @@ export async function loadAttendance() {
     map[`${r.employee_id}|${r.date}`] = {
       checkIn: r.check_in, checkOut: r.check_out, type: r.type,
       wfhCheckIn: r.wfh_check_in, wfhCheckOut: r.wfh_check_out,
+      // Second session — split-shift employees who work a day shift and
+      // then come back for a few extra hours at night.
+      secondCheckIn: r.second_check_in, secondCheckOut: r.second_check_out,
       alternateDay: !!r.alternate_day, leaveReason: r.leave_reason || "",
     };
   });
@@ -103,6 +106,7 @@ export async function saveAttendanceRecord(employeeId, date, rec, source) {
       check_in: rec.checkIn || null, check_out: rec.checkOut || null,
       type: rec.type || "office", source: source || "web",
       wfh_check_in: rec.wfhCheckIn || null, wfh_check_out: rec.wfhCheckOut || null,
+      second_check_in: rec.secondCheckIn || null, second_check_out: rec.secondCheckOut || null,
       alternate_day: !!rec.alternateDay, leave_reason: rec.leaveReason || null,
     }]),
   });

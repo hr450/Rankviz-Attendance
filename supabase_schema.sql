@@ -35,6 +35,22 @@ alter table attendance add column if not exists wfh_check_out timestamptz;
 alter table attendance add column if not exists alternate_day boolean not null default false;
 alter table attendance add column if not exists leave_reason text;
 
+-- Split-shift support: some employees work a normal day shift (~9-4) and then
+-- come back for a second, shorter session at night (~2-3 hours). The device
+-- and Supabase row only ever had ONE check_in/check_out pair, so that second
+-- session's punches were silently dropped as "duplicate". These columns give
+-- every employee a second, independent session for the same date.
+alter table attendance add column if not exists second_check_in timestamptz;
+alter table attendance add column if not exists second_check_out timestamptz;
+
+-- Already referenced by api/iclock/cdata.js and api/attendance/edit.js, but
+-- missing from this schema file — adding them here so a fresh database
+-- (or anyone re-running this file to check for drift) actually has them.
+alter table attendance add column if not exists manually_edited boolean not null default false;
+alter table attendance add column if not exists edited_by text;
+alter table attendance add column if not exists edited_at timestamptz;
+alter table attendance add column if not exists notes text;
+
 /* ---------------- app_users (HR admin + employee logins) ---------------- */
 create table if not exists app_users (
   id text primary key,

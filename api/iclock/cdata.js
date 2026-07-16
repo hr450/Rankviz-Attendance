@@ -19,34 +19,49 @@
 // the row's current value once again reflects the device rather than
 // HR's correction.
 //
-// SHIFT PATTERNS: there are two shifts — day (~9am-6pm) and night
-// (~8pm-5am) — and day-shift staff who arrive late (e.g. after 12pm) can
-// still check out as late as 8-10pm, which overlaps the night shift's
-// check-in window. So evening/early-morning punches are classified
-// CONTEXT-AWARE, not by a fixed hour cutoff alone:
+// SHIFT PATTERNS: there are three patterns —
+//   - day shift (~9am-6pm)
+//   - night shift (~8pm-5am)
+//   - split shift: a day session (~9am-4pm) followed by a SECOND, shorter
+//     session at night (~2-3 hours) for the same employee on the same date.
+// Day-shift staff who arrive late (e.g. after 12pm) can still check out as
+// late as 8-10pm, which overlaps the night shift's check-in window. So
+// evening/early-morning punches are classified CONTEXT-AWARE, not by a
+// fixed hour cutoff alone, and each date now has TWO independent sessions
+// (check_in/check_out, and second_check_in/second_check_out) so a split
+// shift's night punches don't get discarded as duplicates of the day
+// session that's already closed.
 //
 // PUNCH CLASSIFICATION (in priority order):
 //   1. Evening punch (hour >= EVENING_HOUR, 8pm+):
-//        - If there's already an open check-in from EARLIER TODAY
-//          (e.g. a 1:28pm day-shift check-in), this punch closes it as
-//          check-out — no matter how late it is.
-//        - Otherwise (nothing open yet today), it's a genuine night-shift
-//          check-in.
+//        - If there's an open FIRST session (check_in set, no check_out),
+//          this punch closes it as the first session's check-out — no
+//          matter how late it is. Covers a normal day shift running long.
+//        - Else if the FIRST session hasn't started at all today, this is
+//          a genuine (first-session) night-shift check-in.
+//        - Else (first session already fully closed today) — this is the
+//          split-shift case: open the SECOND session's check-in, unless a
+//          second session is already open or already used today.
 //   2. Early-morning punch (hour === MORNING_HOUR, the 5am hour):
-//        - Try closing an open check-in from YESTERDAY first (the normal
-//          night-shift-ending case).
-//        - If yesterday has nothing open, try closing an open check-in
-//          from TODAY (a same-day early finish).
-//        - If neither exists, treat it as a genuine early check-in for
-//          today rather than dropping the punch.
+//        - Try closing an open SECOND check-in from YESTERDAY first (the
+//          common split-shift-ending case).
+//        - Then an open FIRST check-in from YESTERDAY (pure night-shift
+//          employees with only one session).
+//        - Then an open SECOND check-in from TODAY, then an open FIRST
+//          check-in from TODAY (same-day early finish, either session).
+//        - If none exist, treat it as a genuine early check-in for today
+//          rather than dropping the punch.
 //   3. Overnight-shift window — for other early hours (before noon, not
-//      hour 5), an open check-in from yesterday can still be closed if
-//      the gap is plausible (existing behavior, unchanged).
+//      hour 5), an open check-in from yesterday (second session first,
+//      then first session) can still be closed if the gap is plausible
+//      (existing behavior, unchanged, extended to check both sessions).
 //   4. Normal same-day logic — the FIRST punch of the day is check_in. A
 //      second punch is check_out if later than check_in; if it's
 //      EARLIER than the stored check_in (e.g. punches arrived out of
 //      order during a historical backfill), it's treated as the real
-//      check_in and the old value shifts into check_out.
+//      check_in and the old value shifts into check_out. This rule only
+//      concerns the FIRST session — daytime punches never touch the
+//      second session, which only ever opens from an evening punch.
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -94,6 +109,12 @@ const DEVICE_WRITE_RESET_FIELDS = {
   manually_edited: false,
   edited_by: null,
   edited_at: null,
+};
+
+// Column-name pairs for the two sessions a single day can now have.
+const SESSION_FIELDS = {
+  first: { in: "check_in", out: "check_out" },
+  second: { in: "second_check_in", out: "second_check_out" },
 };
 
 function getSupabaseBaseUrl() {
@@ -158,18 +179,19 @@ async function autoCreateEmployee(zkUserId, deviceName) {
 
 async function getAttendanceRow(employeeId, dateStr) {
   const rows = await supabaseFetch(
-    `attendance?employee_id=eq.${encodeURIComponent(employeeId)}&date=eq.${dateStr}&select=employee_id,date,check_in,check_out,manually_edited`
+    `attendance?employee_id=eq.${encodeURIComponent(employeeId)}&date=eq.${dateStr}&select=employee_id,date,check_in,check_out,second_check_in,second_check_out,manually_edited`
   );
   return rows && rows[0];
 }
 
-// Try to close an open check-in (check_in set, check_out null) on the row
-// for `dateStr`. Returns "closed", "duplicate" (punch too close to
-// check_in to be real), or "none" (no open check-in to close).
-async function closeOpenCheckIn(employeeId, dateStr, punchTime) {
+// Try to close an open check-in on `session` ("first" | "second") for the
+// row on `dateStr`. Returns "closed", "duplicate" (punch too close to the
+// check-in to be real), or "none" (no open check-in on that session).
+async function closeOpenSession(employeeId, dateStr, punchTime, session) {
+  const { in: inField, out: outField } = SESSION_FIELDS[session];
   const row = await getAttendanceRow(employeeId, dateStr);
-  if (row && row.check_in && !row.check_out) {
-    const gapMs = punchTime.getTime() - new Date(row.check_in).getTime();
+  if (row && row[inField] && !row[outField]) {
+    const gapMs = punchTime.getTime() - new Date(row[inField]).getTime();
     if (gapMs >= MIN_CHECKOUT_GAP_MS) {
       await supabaseFetch(
         `attendance?employee_id=eq.${encodeURIComponent(employeeId)}&date=eq.${dateStr}`,
@@ -177,7 +199,7 @@ async function closeOpenCheckIn(employeeId, dateStr, punchTime) {
           method: "PATCH",
           prefer: "return=minimal",
           body: JSON.stringify({
-            check_out: punchTime.toISOString(),
+            [outField]: punchTime.toISOString(),
             ...DEVICE_WRITE_RESET_FIELDS,
           }),
         }
@@ -189,9 +211,11 @@ async function closeOpenCheckIn(employeeId, dateStr, punchTime) {
   return "none";
 }
 
-// Record `punchTime` as a check-in for `dateStr`. If today already has a
-// check-in, this is treated as a duplicate scan rather than overwritten.
-async function recordCheckIn(employeeId, dateStr, punchTime) {
+// Record `punchTime` as a check-in on `session` ("first" | "second") for
+// `dateStr`. If that session already has a check-in today, this is treated
+// as a duplicate scan rather than overwritten.
+async function recordSessionCheckIn(employeeId, dateStr, punchTime, session) {
+  const { in: inField } = SESSION_FIELDS[session];
   const row = await getAttendanceRow(employeeId, dateStr);
 
   if (!row) {
@@ -201,25 +225,25 @@ async function recordCheckIn(employeeId, dateStr, punchTime) {
       body: JSON.stringify({
         employee_id: employeeId,
         date: dateStr,
-        check_in: punchTime.toISOString(),
+        [inField]: punchTime.toISOString(),
         source: "device",
         type: "office",
         ...DEVICE_WRITE_RESET_FIELDS,
       }),
     });
-    return "check_in_recorded";
+    return `${session}_check_in_recorded`;
   }
 
-  if (!row.check_in) {
+  if (!row[inField]) {
     await supabaseFetch(
       `attendance?employee_id=eq.${encodeURIComponent(employeeId)}&date=eq.${dateStr}`,
       {
         method: "PATCH",
         prefer: "return=minimal",
-        body: JSON.stringify({ check_in: punchTime.toISOString(), ...DEVICE_WRITE_RESET_FIELDS }),
+        body: JSON.stringify({ [inField]: punchTime.toISOString(), ...DEVICE_WRITE_RESET_FIELDS }),
       }
     );
-    return "check_in_recorded";
+    return `${session}_check_in_recorded`;
   }
 
   return "duplicate_ignored";
@@ -230,29 +254,55 @@ async function applyPunch(employeeId, punchTime) {
 
   // --- Rule 1: evening punch (8pm+) — context-aware -----------------------
   if (hour >= EVENING_HOUR) {
-    const result = await closeOpenCheckIn(employeeId, dateStr, punchTime);
-    if (result === "closed") return "check_out_recorded";
-    if (result === "duplicate") return "duplicate_ignored";
-    // Nothing open yet today -> this is a genuine night-shift check-in.
-    return await recordCheckIn(employeeId, dateStr, punchTime);
+    // a) An open first session (day shift running long, or a night-shift
+    //    check-in from earlier this evening) — close it.
+    const firstResult = await closeOpenSession(employeeId, dateStr, punchTime, "first");
+    if (firstResult === "closed") return "check_out_recorded";
+    if (firstResult === "duplicate") return "duplicate_ignored";
+
+    // b) First session hasn't started today at all — genuine (first-
+    //    session) night-shift check-in.
+    const row = await getAttendanceRow(employeeId, dateStr);
+    if (!row || !row.check_in) {
+      return await recordSessionCheckIn(employeeId, dateStr, punchTime, "first");
+    }
+
+    // c) First session already fully closed today (check_in + check_out
+    //    both set) — this is the split-shift case. Open the second
+    //    session, unless one is already open or already used today.
+    if (row.check_in && row.check_out) {
+      if (!row.second_check_in) {
+        return await recordSessionCheckIn(employeeId, dateStr, punchTime, "second");
+      }
+      // Second session already open or already closed today — don't
+      // silently overwrite it; treat as a duplicate/extra scan.
+      return "duplicate_ignored";
+    }
+
+    return "duplicate_ignored";
   }
 
   // --- Rule 2: early-morning punch (5am hour) — ALWAYS a checkout ---------
-  // Business rule: night shift always ends around 5am, so a 5am punch is
-  // never a check-in. If there's nothing open to close (yesterday or
-  // today), the punch is dropped rather than starting a bogus check-in.
+  // Business rule: a night session always ends around 5am, so a 5am punch
+  // is never a check-in. Tries the second session first (the common
+  // split-shift-ending case), then the first session, on yesterday and
+  // then today. If nothing is open anywhere, the punch is dropped rather
+  // than starting a bogus check-in.
   if (hour === MORNING_HOUR) {
     const yDateStr = prevDateStr(dateStr);
-    const yResult = await closeOpenCheckIn(employeeId, yDateStr, punchTime);
-    if (yResult === "closed") return "overnight_check_out_recorded";
-    if (yResult === "duplicate") return "duplicate_ignored";
 
-    const tResult = await closeOpenCheckIn(employeeId, dateStr, punchTime);
-    if (tResult === "closed") return "check_out_recorded";
-    if (tResult === "duplicate") return "duplicate_ignored";
+    for (const [when, ds] of [["yesterday", yDateStr], ["today", dateStr]]) {
+      for (const session of ["second", "first"]) {
+        const result = await closeOpenSession(employeeId, ds, punchTime, session);
+        if (result === "closed") {
+          return when === "yesterday" ? "overnight_check_out_recorded" : "check_out_recorded";
+        }
+        if (result === "duplicate") return "duplicate_ignored";
+      }
+    }
 
-    // Nothing open to close on either day -> drop the punch, do NOT
-    // create a check-in at 5am.
+    // Nothing open to close anywhere -> drop the punch, do NOT create a
+    // check-in at 5am.
     console.log(
       `zkteco: 5am punch for ${employeeId} on ${dateStr} had no open check-in to close — ignored`
     );
@@ -262,28 +312,31 @@ async function applyPunch(employeeId, punchTime) {
   // --- Rule 3: overnight-shift window for other early hours ---------------
   if (hour < OVERNIGHT_CUTOFF_LOCAL_HOUR) {
     const yDateStr = prevDateStr(dateStr);
-    const yRow = await getAttendanceRow(employeeId, yDateStr);
-    if (yRow && yRow.check_in && !yRow.check_out) {
-      const gapMs = punchTime.getTime() - new Date(yRow.check_in).getTime();
-      if (gapMs >= MIN_CHECKOUT_GAP_MS && gapMs <= OVERNIGHT_MAX_GAP_MS) {
-        await supabaseFetch(
-          `attendance?employee_id=eq.${encodeURIComponent(employeeId)}&date=eq.${yDateStr}`,
-          {
-            method: "PATCH",
-            prefer: "return=minimal",
-            body: JSON.stringify({
-              check_out: punchTime.toISOString(),
-              ...DEVICE_WRITE_RESET_FIELDS,
-            }),
-          }
-        );
-        return "overnight_check_out_recorded";
+    for (const session of ["second", "first"]) {
+      const { in: inField, out: outField } = SESSION_FIELDS[session];
+      const yRow = await getAttendanceRow(employeeId, yDateStr);
+      if (yRow && yRow[inField] && !yRow[outField]) {
+        const gapMs = punchTime.getTime() - new Date(yRow[inField]).getTime();
+        if (gapMs >= MIN_CHECKOUT_GAP_MS && gapMs <= OVERNIGHT_MAX_GAP_MS) {
+          await supabaseFetch(
+            `attendance?employee_id=eq.${encodeURIComponent(employeeId)}&date=eq.${yDateStr}`,
+            {
+              method: "PATCH",
+              prefer: "return=minimal",
+              body: JSON.stringify({
+                [outField]: punchTime.toISOString(),
+                ...DEVICE_WRITE_RESET_FIELDS,
+              }),
+            }
+          );
+          return "overnight_check_out_recorded";
+        }
       }
     }
   }
   // --------------------------------------------------------------------------
 
-  // --- Rule 4: normal same-day logic, order-corrected ----------------------
+  // --- Rule 4: normal same-day logic, order-corrected (first session only) -
   const row = await getAttendanceRow(employeeId, dateStr);
 
   if (!row) {
@@ -344,6 +397,18 @@ async function applyPunch(employeeId, punchTime) {
       }
     );
     return "check_in_corrected_out_of_order";
+  }
+
+  if (!row.check_in) {
+    await supabaseFetch(
+      `attendance?employee_id=eq.${encodeURIComponent(employeeId)}&date=eq.${dateStr}`,
+      {
+        method: "PATCH",
+        prefer: "return=minimal",
+        body: JSON.stringify({ check_in: punchTime.toISOString(), ...DEVICE_WRITE_RESET_FIELDS }),
+      }
+    );
+    return "check_in_recorded";
   }
 
   // Already has both check_in and check_out -> duplicate punch, ignore.

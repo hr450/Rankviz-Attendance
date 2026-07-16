@@ -149,7 +149,15 @@ export default function App() {
     else if (action === "out") rec = { ...existing, checkOut: new Date().toISOString() };
     else if (action === "wfh_in") rec = { ...existing, wfhCheckIn: new Date().toISOString(), type: "wfh", wfhReason: meta?.reason, wfhLocation: meta?.location };
     else if (action === "wfh_out") rec = { ...existing, wfhCheckOut: new Date().toISOString() };
-    else if (action === "leave") rec = { ...existing, type: "leave", checkIn: null, checkOut: null, wfhCheckIn: null, wfhCheckOut: null };
+    // Second session — split-shift employees who work a normal day shift
+    // and then come back for a shorter second session at night. Only
+    // meaningful once the first session's check-out is already in, but we
+    // don't hard-block it here (mirrors how "in"/"out" above don't block
+    // out-of-order taps either — bad taps get caught on review, not by
+    // silently refusing to save).
+    else if (action === "second_in") rec = { ...existing, secondCheckIn: new Date().toISOString() };
+    else if (action === "second_out") rec = { ...existing, secondCheckOut: new Date().toISOString() };
+    else if (action === "leave") rec = { ...existing, type: "leave", checkIn: null, checkOut: null, wfhCheckIn: null, wfhCheckOut: null, secondCheckIn: null, secondCheckOut: null };
     else if (action === "alternate") rec = { ...existing, alternateDay: true };
     else return;
 
@@ -167,6 +175,7 @@ export default function App() {
     const ACTION_LABEL = {
       in: "checked in", out: "checked out", wfh_in: "started working from home",
       wfh_out: "ended their WFH session", leave: "marked leave", alternate: "marked an alternate day",
+      second_in: "started their second (night) session", second_out: "ended their second (night) session",
     };
     notifyHR({
       subject: `RankViz — ${emp?.name || "An employee"} ${ACTION_LABEL[action] || "updated attendance"}`,
