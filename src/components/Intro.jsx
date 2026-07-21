@@ -1,18 +1,6 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { ShieldCheck, TrendingUp, ClipboardList, Lock, ArrowRight } from "lucide-react";
 import { LogoMark } from "./ui";
-
-const WATERMARKS = [
-  { text: "NO ERROR", top: "36%", left: "8%" },
-  { text: "EASY", top: "32%", left: "84%" },
-  { text: "RELIABLE", top: "46%", left: "5%" },
-  { text: "SECURE", top: "50%", left: "60%" },
-  { text: "NO DIFFICULTY", top: "58%", left: "20%" },
-  { text: "TURN OUT", top: "66%", left: "78%" },
-  { text: "ENROLL", top: "72%", left: "10%" },
-  { text: "SECURE", top: "80%", left: "52%" },
-  { text: "RELIABLE", top: "86%", left: "70%" },
-];
 
 const MESSAGES = [
   { text: "Hi!", emotion: "happy" },
@@ -31,7 +19,6 @@ const ADVANTAGES = [
 export default function Intro({ onContinue }) {
   const [msgIndex, setMsgIndex] = useState(0);
   const [show, setShow] = useState(true);
-  const pageRef = useRef(null);
   const [particles] = useState(() =>
     Array.from({ length: 16 }, () => ({
       left: Math.random() * 100,
@@ -52,76 +39,56 @@ export default function Intro({ onContinue }) {
     return () => clearInterval(t);
   }, []);
 
-  const handlePointerMove = (e) => {
-    const el = pageRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    el.style.setProperty("--rv-mx", `${x}px`);
-    el.style.setProperty("--rv-my", `${y}px`);
-    el.style.setProperty("--rv-glow", "1");
-  };
-
-  const handlePointerLeave = () => {
-    const el = pageRef.current;
-    if (!el) return;
-    el.style.setProperty("--rv-glow", "0");
-  };
-
   const msg = MESSAGES[msgIndex];
 
   return (
-    <div className="rvintro-page" ref={pageRef} onMouseMove={handlePointerMove} onMouseLeave={handlePointerLeave}>
+    <div className="rvintro-page">
       <style>{CSS}</style>
       <div className="rvintro-bg" />
-      <div className="rvintro-bg-overlay" />
-      <div className="rvintro-silk-wave">
-        <svg viewBox="0 0 1440 800" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <linearGradient id="rvSilkA" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#1E4FD8" stopOpacity="0" />
-              <stop offset="50%" stopColor="#6FA8FF" stopOpacity="0.9" />
-              <stop offset="100%" stopColor="#2F6FED" stopOpacity="0" />
-            </linearGradient>
-            <linearGradient id="rvSilkB" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#2F6FED" stopOpacity="0" />
-              <stop offset="50%" stopColor="#AEC1E8" stopOpacity="0.7" />
-              <stop offset="100%" stopColor="#1E4FD8" stopOpacity="0" />
-            </linearGradient>
-          </defs>
-          <path className="rvintro-silk-path rvintro-silk-path1" fill="none" stroke="url(#rvSilkA)" strokeWidth="3" strokeLinecap="round">
-            <animate attributeName="d" dur="9s" repeatCount="indefinite"
-              values="M-100,320 C 260,220 480,420 760,300 C 1040,180 1260,360 1540,260;
-                      M-100,300 C 260,420 480,220 760,360 C 1040,420 1260,220 1540,340;
-                      M-100,320 C 260,220 480,420 760,300 C 1040,180 1260,360 1540,260" />
-          </path>
-          <path className="rvintro-silk-path rvintro-silk-path2" fill="none" stroke="url(#rvSilkB)" strokeWidth="2" strokeLinecap="round">
-            <animate attributeName="d" dur="12s" repeatCount="indefinite"
-              values="M-100,420 C 220,500 520,320 760,420 C 1000,520 1300,340 1540,440;
-                      M-100,440 C 220,340 520,500 760,400 C 1000,320 1300,500 1540,360;
-                      M-100,420 C 220,500 520,320 760,420 C 1000,520 1300,340 1540,440" />
-          </path>
-          <path className="rvintro-silk-path rvintro-silk-path3" fill="none" stroke="url(#rvSilkA)" strokeWidth="1.5" strokeLinecap="round" opacity="0.6">
-            <animate attributeName="d" dur="15s" repeatCount="indefinite"
-              values="M-100,220 C 300,140 560,300 820,200 C 1080,100 1320,260 1540,180;
-                      M-100,240 C 300,300 560,140 820,240 C 1080,300 1320,140 1540,220;
-                      M-100,220 C 300,140 560,300 820,200 C 1080,100 1320,260 1540,180" />
-          </path>
-        </svg>
+      <div className="rvintro-glass-waves">
+        <div className="rvintro-glass-track">
+          <svg className="rvintro-glass-svg" viewBox="0 0 1600 800" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="rvGlass1" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stopColor="#0A1E42" stopOpacity="0"/>
+                <stop offset="30%" stopColor="#1E4FD8" stopOpacity="0.5"/>
+                <stop offset="55%" stopColor="#6FA8FF" stopOpacity="0.65"/>
+                <stop offset="80%" stopColor="#2F6FED" stopOpacity="0.45"/>
+                <stop offset="100%" stopColor="#0A1E42" stopOpacity="0"/>
+              </linearGradient>
+              <linearGradient id="rvGlass2" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stopColor="#0A1E42" stopOpacity="0"/>
+                <stop offset="35%" stopColor="#2F6FED" stopOpacity="0.4"/>
+                <stop offset="60%" stopColor="#AEC1E8" stopOpacity="0.55"/>
+                <stop offset="100%" stopColor="#0A1E42" stopOpacity="0"/>
+              </linearGradient>
+            </defs>
+            {[0, 40, 80, 120, 160].map((offset, i) => (
+              <path
+                key={i}
+                d={`M-100,${420 - offset} C300,${180 - offset} 600,${640 - offset} 950,${400 - offset} C1250,${190 - offset} 1450,${420 - offset} 1700,${380 - offset}`}
+                fill="none"
+                stroke={i % 2 === 0 ? "url(#rvGlass1)" : "url(#rvGlass2)"}
+                strokeWidth={14 - i * 1.5}
+              />
+            ))}
+          </svg>
+          <svg className="rvintro-glass-svg" viewBox="0 0 1600 800" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+            {[0, 40, 80, 120, 160].map((offset, i) => (
+              <path
+                key={i}
+                d={`M-100,${420 - offset} C300,${180 - offset} 600,${640 - offset} 950,${400 - offset} C1250,${190 - offset} 1450,${420 - offset} 1700,${380 - offset}`}
+                fill="none"
+                stroke={i % 2 === 0 ? "url(#rvGlass1)" : "url(#rvGlass2)"}
+                strokeWidth={14 - i * 1.5}
+              />
+            ))}
+          </svg>
+        </div>
       </div>
       <div className="rvintro-orb rvintro-orb1" />
       <div className="rvintro-orb rvintro-orb2" />
       <div className="rvintro-orb rvintro-orb3" />
-
-      <div className="rvintro-watermarks">
-        {WATERMARKS.map((w, i) => (
-          <span key={i} className="rvintro-watermark-word" style={{ top: w.top, left: w.left }}>
-            {w.text}
-          </span>
-        ))}
-      </div>
-
 
       <div className="rvintro-particles">
         {particles.map((p, i) => (
@@ -135,14 +102,8 @@ export default function Intro({ onContinue }) {
 
       <div className="rvintro-stage">
         <div className="rvintro-top-row">
-          <div />
+          <div className="rvintro-brand"><LogoMark size={36} dark={true} showWord={false} /></div>
           <div className="rvintro-status-chip"><span className="rvintro-dot" /> Live &amp; verifying</div>
-        </div>
-
-        <div className="rvintro-hero-logo-wrap">
-          <div className="rvintro-logo-inner">
-            <LogoMark size={110} dark={true} showWord={false} />
-          </div>
         </div>
 
         <div className="rvintro-main-grid">
@@ -217,27 +178,24 @@ const CSS = `
 }
 .rvintro-bg{
   position:fixed; inset:0; z-index:0;
-  background-image:url("/login-background.webp");
-  background-size:cover; background-position:center; background-repeat:no-repeat;
+  background:linear-gradient(160deg, var(--navy-950), var(--navy-800) 55%, var(--royal) 130%);
+  background-size:220% 220%;
+  animation:rvintroBgshift 18s ease-in-out infinite;
 }
-.rvintro-bg-overlay{
-  position:fixed; inset:0; z-index:0;
-  background:linear-gradient(180deg, rgba(5,15,34,0.5), rgba(5,15,34,0.82) 65%, rgba(5,15,34,0.94));
+@keyframes rvintroBgshift{
+  0%{background-position:0% 20%;} 50%{background-position:100% 80%;} 100%{background-position:0% 20%;}
 }
-.rvintro-silk-wave{
-  position:fixed; inset:0; z-index:0; overflow:hidden; pointer-events:none;
-  opacity:0.55; mix-blend-mode:screen;
+.rvintro-glass-waves{
+  position:fixed; inset:0; z-index:1; pointer-events:none; overflow:hidden;
+  mix-blend-mode:screen; opacity:0.85;
 }
-.rvintro-silk-wave svg{ width:100%; height:100%; display:block; }
-.rvintro-silk-path{ filter:blur(1.5px) drop-shadow(0 0 14px rgba(47,111,237,0.55)); animation:rvintroSilkDrift 22s ease-in-out infinite; }
-.rvintro-silk-path1{ animation-duration:20s; }
-.rvintro-silk-path2{ animation-duration:26s; animation-direction:reverse; }
-.rvintro-silk-path3{ animation-duration:30s; }
-@keyframes rvintroSilkDrift{
-  0%{ transform:translateX(0) translateY(0); }
-  50%{ transform:translateX(-2.5%) translateY(10px); }
-  100%{ transform:translateX(0) translateY(0); }
+.rvintro-glass-track{
+  position:absolute; top:0; left:0; height:100%; width:200%;
+  display:flex; animation:rvintroGlassDrift 34s linear infinite;
 }
+.rvintro-glass-svg{ width:50%; height:100%; flex-shrink:0; display:block; }
+@keyframes rvintroGlassDrift{ from{ transform:translateX(0); } to{ transform:translateX(-50%); } }
+
 .rvintro-particles{ position:fixed; inset:0; z-index:0; pointer-events:none; overflow:hidden; }
 .rvintro-particle{
   position:absolute; bottom:-20px; width:4px; height:4px; border-radius:50%;
@@ -258,17 +216,6 @@ const CSS = `
 @keyframes rvintroFloat2{0%,100%{transform:translate(0,0);}50%{transform:translate(-45px,-35px);}}
 @keyframes rvintroFloat3{0%,100%{transform:translate(0,0) scale(1);}50%{transform:translate(-25px,30px) scale(1.12);}}
 
-.rvintro-watermarks{
-  position:fixed; inset:0; z-index:1; overflow:hidden; pointer-events:none;
-  -webkit-mask-image: radial-gradient(circle 160px at var(--rv-mx, 50%) var(--rv-my, 50%), rgba(0,0,0,calc(var(--rv-glow, 0) * 1)) 0%, rgba(0,0,0,calc(var(--rv-glow, 0) * 0.35)) 55%, rgba(0,0,0,0) 100%);
-  mask-image: radial-gradient(circle 160px at var(--rv-mx, 50%) var(--rv-my, 50%), rgba(0,0,0,calc(var(--rv-glow, 0) * 1)) 0%, rgba(0,0,0,calc(var(--rv-glow, 0) * 0.35)) 55%, rgba(0,0,0,0) 100%);
-}
-.rvintro-watermark-word{
-  position:absolute; transform:translate(-50%,-50%);
-  font-size:clamp(18px,2.6vw,30px); font-weight:800; letter-spacing:0.1em; text-transform:uppercase;
-  color:rgba(111,168,255,0.95); white-space:nowrap; text-shadow:0 0 18px rgba(47,111,237,0.65);
-}
-
 .rvintro-stage{position:relative; z-index:2; flex:1; display:flex; flex-direction:column; width:100%; max-width:1180px; margin:0 auto; padding:clamp(24px,4vh,44px) clamp(20px,5vw,48px) 0;}
 .rvintro-top-row{display:flex; justify-content:space-between; align-items:center; padding-bottom:8px;}
 .rvintro-brand{ opacity:0; animation:rvintroFadeUp 0.8s ease forwards 0.05s; }
@@ -280,12 +227,6 @@ const CSS = `
 .rvintro-dot{width:6px;height:6px;border-radius:50%; background:var(--mint); display:inline-block; box-shadow:0 0 0 0 rgba(24,178,116,0.5); animation:rvintroAiPulse 1.6s ease-out infinite;}
 @keyframes rvintroAiPulse{0%{box-shadow:0 0 0 0 rgba(24,178,116,0.45);}70%{box-shadow:0 0 0 6px rgba(24,178,116,0);}100%{box-shadow:0 0 0 0 rgba(24,178,116,0);}}
 @keyframes rvintroFadeUp{ from{opacity:0; transform:translateY(14px);} to{opacity:1; transform:translateY(0);} }
-
-.rvintro-hero-logo-wrap{
-  position:relative; display:flex; align-items:center; justify-content:center;
-  padding:22px 0 6px; opacity:0; animation:rvintroFadeUp 0.8s ease forwards 0.12s;
-}
-.rvintro-logo-inner{ position:relative; z-index:2; }
 
 .rvintro-main-grid{ flex:1; display:grid; grid-template-columns:1.2fr 0.95fr; gap:clamp(24px,4vw,56px); align-items:center; padding:clamp(20px,3vh,36px) 0; }
 @media (max-width:760px){ .rvintro-main-grid{grid-template-columns:1fr;} }
