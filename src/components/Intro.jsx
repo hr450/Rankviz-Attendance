@@ -3,21 +3,18 @@ import { ShieldCheck, TrendingUp, ClipboardList, Lock, ArrowRight } from "lucide
 import { LogoMark } from "./ui";
 
 const WATERMARKS = [
-  { text: "SECURE", top: "10%", left: "10%" },
-  { text: "TRUSTED", top: "8%", left: "62%" },
-  { text: "REAL-TIME", top: "20%", left: "38%" },
-  { text: "RELIABLE", top: "34%", left: "6%" },
-  { text: "CONSISTENT", top: "40%", left: "56%" },
-  { text: "PROTECTED", top: "48%", left: "22%" },
-  { text: "ACCURATE", top: "62%", left: "8%" },
-  { text: "ENCRYPTED", top: "58%", left: "64%" },
-  { text: "ERROR-FREE", top: "28%", left: "78%" },
-  { text: "VERIFIED", top: "34%", left: "88%" },
-  { text: "PRECISE", top: "70%", left: "48%" },
-  { text: "AUDIT-READY", top: "78%", left: "72%" },
+  { text: "NO ERROR", top: "36%", left: "8%" },
+  { text: "EASY", top: "32%", left: "84%" },
+  { text: "RELIABLE", top: "46%", left: "5%" },
+  { text: "SECURE", top: "50%", left: "60%" },
+  { text: "NO DIFFICULTY", top: "58%", left: "20%" },
+  { text: "TURN OUT", top: "66%", left: "78%" },
+  { text: "ENROLL", top: "72%", left: "10%" },
+  { text: "SECURE", top: "80%", left: "52%" },
+  { text: "RELIABLE", top: "86%", left: "70%" },
 ];
 
-const ORBIT_LABELS = ["SECURE", "VERIFIED", "REAL-TIME", "ENCRYPTED", "AI-POWERED", "ACCURATE", "TRUSTED", "AUDIT-READY", "PROTECTED", "PRECISE"];
+const LOGO_WORDS = ["NO ERROR", "EASY", "RELIABLE", "SECURE", "NO DIFFICULTY", "TURN OUT", "ENROLL"];
 
 const MESSAGES = [
   { text: "Hi!", emotion: "happy" },
@@ -111,26 +108,19 @@ export default function Intro({ onContinue }) {
         </div>
 
         <div className="rvintro-hero-logo-wrap">
-          <div className="rvintro-hero-orbit">
-            {ORBIT_LABELS.map((label, i) => {
-              const angle = (360 / ORBIT_LABELS.length) * i - 90;
-              const rad = (angle * Math.PI) / 180;
-              const radius = 150;
-              const ox = Math.cos(rad) * radius;
-              const oy = Math.sin(rad) * radius;
-              return (
-                <span
-                  key={i}
-                  className="rvintro-orbit-word"
-                  style={{ "--ox": `${ox}px`, "--oy": `${oy}px`, transitionDelay: `${i * 35}ms` }}
-                >
-                  {label}
-                </span>
-              );
-            })}
+          <div className="rvintro-logo-words">
+            {LOGO_WORDS.map((label, i) => (
+              <span
+                key={i}
+                className={`rvintro-logo-word rvintro-logo-word-size${(i % 3) + 1}`}
+                style={{ transitionDelay: `${i * 40}ms` }}
+              >
+                {label}
+              </span>
+            ))}
           </div>
-          <div className="rvintro-hero-logo">
-            <LogoMark size={92} dark={true} showWord={true} />
+          <div className="rvintro-logo-inner">
+            <LogoMark size={110} dark={true} showWord={false} />
           </div>
         </div>
 
@@ -241,7 +231,7 @@ const CSS = `
 .rvintro-watermark-word{
   position:absolute; transform:translate(-50%,-50%);
   font-size:clamp(18px,2.6vw,30px); font-weight:800; letter-spacing:0.1em; text-transform:uppercase;
-  color:rgba(255,255,255,0.85); white-space:nowrap; text-shadow:0 0 18px rgba(111,168,255,0.6);
+  color:rgba(111,168,255,0.95); white-space:nowrap; text-shadow:0 0 18px rgba(47,111,237,0.65);
 }
 
 .rvintro-stage{position:relative; z-index:2; flex:1; display:flex; flex-direction:column; width:100%; max-width:1180px; margin:0 auto; padding:clamp(24px,4vh,44px) clamp(20px,5vw,48px) 0;}
@@ -260,31 +250,22 @@ const CSS = `
   position:relative; display:flex; align-items:center; justify-content:center;
   padding:22px 0 6px; opacity:0; animation:rvintroFadeUp 0.8s ease forwards 0.12s;
 }
-.rvintro-hero-logo{
-  position:relative; z-index:3; padding:22px 34px; border-radius:26px;
-  background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.16);
-  box-shadow:0 24px 50px -20px rgba(0,0,0,0.55); cursor:default;
-  transition:transform 0.35s cubic-bezier(.2,.8,.3,1), box-shadow 0.35s ease, background 0.35s ease;
+.rvintro-logo-inner{ position:relative; z-index:2; }
+.rvintro-logo-words{
+  position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+  width:min(90vw,420px); z-index:1; pointer-events:none;
+  display:flex; flex-wrap:wrap; align-items:center; justify-content:center;
+  gap:2px 12px; row-gap:2px;
 }
-.rvintro-hero-logo-wrap:hover .rvintro-hero-logo{
-  transform:scale(1.07);
-  box-shadow:0 30px 60px -16px rgba(30,79,216,0.6);
-  background:rgba(255,255,255,0.1);
+.rvintro-logo-word{
+  opacity:0; font-weight:800; letter-spacing:0.01em; text-transform:uppercase;
+  color:rgba(111,168,255,0.95); text-shadow:0 0 16px rgba(47,111,237,0.65);
+  white-space:nowrap; line-height:1.15; transition:opacity 0.45s ease;
 }
-.rvintro-hero-orbit{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; z-index:2; }
-.rvintro-orbit-word{
-  position:absolute; top:50%; left:50%;
-  transform:translate(-50%,-50%) scale(0.15);
-  opacity:0;
-  font-size:11px; font-weight:700; letter-spacing:0.09em; text-transform:uppercase; color:var(--sky);
-  background:rgba(10,20,50,0.6); border:1px solid rgba(111,168,255,0.4); border-radius:100px;
-  padding:5px 12px; white-space:nowrap;
-  transition:transform 0.5s cubic-bezier(.34,1.56,.64,1), opacity 0.4s ease;
-}
-.rvintro-hero-logo-wrap:hover .rvintro-orbit-word{
-  opacity:1;
-  transform:translate(calc(-50% + var(--ox)), calc(-50% + var(--oy))) scale(1);
-}
+.rvintro-logo-word-size1{ font-size:clamp(22px,3vw,32px); }
+.rvintro-logo-word-size2{ font-size:clamp(15px,2vw,21px); }
+.rvintro-logo-word-size3{ font-size:clamp(11px,1.4vw,15px); }
+.rvintro-hero-logo-wrap:hover .rvintro-logo-word{ opacity:1; }
 
 .rvintro-main-grid{ flex:1; display:grid; grid-template-columns:1.2fr 0.95fr; gap:clamp(24px,4vw,56px); align-items:center; padding:clamp(20px,3vh,36px) 0; }
 @media (max-width:760px){ .rvintro-main-grid{grid-template-columns:1fr;} }
