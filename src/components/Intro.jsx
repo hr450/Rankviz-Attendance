@@ -17,6 +17,8 @@ const WATERMARKS = [
   { text: "AUDIT-READY", top: "78%", left: "72%" },
 ];
 
+const ORBIT_LABELS = ["SECURE", "VERIFIED", "REAL-TIME", "ENCRYPTED", "AI-POWERED", "ACCURATE", "TRUSTED", "AUDIT-READY", "PROTECTED", "PRECISE"];
+
 const MESSAGES = [
   { text: "Hi!", emotion: "happy" },
   { text: "Hi employee, please punch your attendance!", emotion: "alert" },
@@ -78,6 +80,7 @@ export default function Intro({ onContinue }) {
     <div className="rvintro-page" ref={pageRef} onMouseMove={handlePointerMove} onMouseLeave={handlePointerLeave}>
       <style>{CSS}</style>
       <div className="rvintro-bg" />
+      <div className="rvintro-bg-overlay" />
       <div className="rvintro-orb rvintro-orb1" />
       <div className="rvintro-orb rvintro-orb2" />
       <div className="rvintro-orb rvintro-orb3" />
@@ -103,8 +106,32 @@ export default function Intro({ onContinue }) {
 
       <div className="rvintro-stage">
         <div className="rvintro-top-row">
-          <div className="rvintro-brand"><LogoMark size={36} dark={true} showWord={false} /></div>
+          <div />
           <div className="rvintro-status-chip"><span className="rvintro-dot" /> Live &amp; verifying</div>
+        </div>
+
+        <div className="rvintro-hero-logo-wrap">
+          <div className="rvintro-hero-orbit">
+            {ORBIT_LABELS.map((label, i) => {
+              const angle = (360 / ORBIT_LABELS.length) * i - 90;
+              const rad = (angle * Math.PI) / 180;
+              const radius = 150;
+              const ox = Math.cos(rad) * radius;
+              const oy = Math.sin(rad) * radius;
+              return (
+                <span
+                  key={i}
+                  className="rvintro-orbit-word"
+                  style={{ "--ox": `${ox}px`, "--oy": `${oy}px`, transitionDelay: `${i * 35}ms` }}
+                >
+                  {label}
+                </span>
+              );
+            })}
+          </div>
+          <div className="rvintro-hero-logo">
+            <LogoMark size={92} dark={true} showWord={true} />
+          </div>
         </div>
 
         <div className="rvintro-main-grid">
@@ -179,12 +206,12 @@ const CSS = `
 }
 .rvintro-bg{
   position:fixed; inset:0; z-index:0;
-  background:linear-gradient(160deg, var(--navy-950), var(--navy-800) 55%, var(--royal) 130%);
-  background-size:220% 220%;
-  animation:rvintroBgshift 18s ease-in-out infinite;
+  background-image:url("/login-background.webp");
+  background-size:cover; background-position:center; background-repeat:no-repeat;
 }
-@keyframes rvintroBgshift{
-  0%{background-position:0% 20%;} 50%{background-position:100% 80%;} 100%{background-position:0% 20%;}
+.rvintro-bg-overlay{
+  position:fixed; inset:0; z-index:0;
+  background:linear-gradient(180deg, rgba(5,15,34,0.5), rgba(5,15,34,0.82) 65%, rgba(5,15,34,0.94));
 }
 .rvintro-particles{ position:fixed; inset:0; z-index:0; pointer-events:none; overflow:hidden; }
 .rvintro-particle{
@@ -228,6 +255,36 @@ const CSS = `
 .rvintro-dot{width:6px;height:6px;border-radius:50%; background:var(--mint); display:inline-block; box-shadow:0 0 0 0 rgba(24,178,116,0.5); animation:rvintroAiPulse 1.6s ease-out infinite;}
 @keyframes rvintroAiPulse{0%{box-shadow:0 0 0 0 rgba(24,178,116,0.45);}70%{box-shadow:0 0 0 6px rgba(24,178,116,0);}100%{box-shadow:0 0 0 0 rgba(24,178,116,0);}}
 @keyframes rvintroFadeUp{ from{opacity:0; transform:translateY(14px);} to{opacity:1; transform:translateY(0);} }
+
+.rvintro-hero-logo-wrap{
+  position:relative; display:flex; align-items:center; justify-content:center;
+  padding:22px 0 6px; opacity:0; animation:rvintroFadeUp 0.8s ease forwards 0.12s;
+}
+.rvintro-hero-logo{
+  position:relative; z-index:3; padding:22px 34px; border-radius:26px;
+  background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.16);
+  box-shadow:0 24px 50px -20px rgba(0,0,0,0.55); cursor:default;
+  transition:transform 0.35s cubic-bezier(.2,.8,.3,1), box-shadow 0.35s ease, background 0.35s ease;
+}
+.rvintro-hero-logo-wrap:hover .rvintro-hero-logo{
+  transform:scale(1.07);
+  box-shadow:0 30px 60px -16px rgba(30,79,216,0.6);
+  background:rgba(255,255,255,0.1);
+}
+.rvintro-hero-orbit{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; z-index:2; }
+.rvintro-orbit-word{
+  position:absolute; top:50%; left:50%;
+  transform:translate(-50%,-50%) scale(0.15);
+  opacity:0;
+  font-size:11px; font-weight:700; letter-spacing:0.09em; text-transform:uppercase; color:var(--sky);
+  background:rgba(10,20,50,0.6); border:1px solid rgba(111,168,255,0.4); border-radius:100px;
+  padding:5px 12px; white-space:nowrap;
+  transition:transform 0.5s cubic-bezier(.34,1.56,.64,1), opacity 0.4s ease;
+}
+.rvintro-hero-logo-wrap:hover .rvintro-orbit-word{
+  opacity:1;
+  transform:translate(calc(-50% + var(--ox)), calc(-50% + var(--oy))) scale(1);
+}
 
 .rvintro-main-grid{ flex:1; display:grid; grid-template-columns:1.2fr 0.95fr; gap:clamp(24px,4vw,56px); align-items:center; padding:clamp(20px,3vh,36px) 0; }
 @media (max-width:760px){ .rvintro-main-grid{grid-template-columns:1fr;} }
