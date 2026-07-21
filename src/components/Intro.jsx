@@ -47,41 +47,50 @@ export default function Intro({ onContinue }) {
       <div className="rvintro-bg" />
       <div className="rvintro-glass-waves">
         <div className="rvintro-glass-track">
-          <svg className="rvintro-glass-svg" viewBox="0 0 1600 800" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+          <svg className="rvintro-glass-svg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
             <defs>
-              <linearGradient id="rvGlass1" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stopColor="#0A1E42" stopOpacity="0"/>
-                <stop offset="30%" stopColor="#1E4FD8" stopOpacity="0.5"/>
-                <stop offset="55%" stopColor="#6FA8FF" stopOpacity="0.65"/>
-                <stop offset="80%" stopColor="#2F6FED" stopOpacity="0.45"/>
+              <linearGradient id="rvGlassA" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stopColor="#ffffff" stopOpacity="0"/>
+                <stop offset="30%" stopColor="#EAF2FF" stopOpacity="0.85"/>
+                <stop offset="55%" stopColor="#6FA8FF" stopOpacity="0.9"/>
+                <stop offset="80%" stopColor="#1E4FD8" stopOpacity="0.6"/>
                 <stop offset="100%" stopColor="#0A1E42" stopOpacity="0"/>
               </linearGradient>
-              <linearGradient id="rvGlass2" x1="0" y1="0" x2="1" y2="1">
+              <linearGradient id="rvGlassB" x1="0" y1="0" x2="1" y2="1">
                 <stop offset="0%" stopColor="#0A1E42" stopOpacity="0"/>
-                <stop offset="35%" stopColor="#2F6FED" stopOpacity="0.4"/>
-                <stop offset="60%" stopColor="#AEC1E8" stopOpacity="0.55"/>
+                <stop offset="35%" stopColor="#2F6FED" stopOpacity="0.55"/>
+                <stop offset="60%" stopColor="#ffffff" stopOpacity="0.7"/>
                 <stop offset="100%" stopColor="#0A1E42" stopOpacity="0"/>
               </linearGradient>
+              <linearGradient id="rvGlassC" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stopColor="#0A1E42" stopOpacity="0"/>
+                <stop offset="40%" stopColor="#AEC1E8" stopOpacity="0.55"/>
+                <stop offset="70%" stopColor="#3D7DFF" stopOpacity="0.5"/>
+                <stop offset="100%" stopColor="#0A1E42" stopOpacity="0"/>
+              </linearGradient>
+              <filter id="rvGlassBlur" x="-30%" y="-30%" width="160%" height="160%">
+                <feGaussianBlur stdDeviation="6"/>
+              </filter>
             </defs>
-            {[0, 40, 80, 120, 160].map((offset, i) => (
-              <path
-                key={i}
-                d={`M-100,${420 - offset} C300,${180 - offset} 600,${640 - offset} 950,${400 - offset} C1250,${190 - offset} 1450,${420 - offset} 1700,${380 - offset}`}
-                fill="none"
-                stroke={i % 2 === 0 ? "url(#rvGlass1)" : "url(#rvGlass2)"}
-                strokeWidth={14 - i * 1.5}
-              />
+            {[
+              { d: "M-100,520 C250,260 500,700 820,480 C1150,250 1350,560 1700,440 L1700,900 L-100,900 Z", fill: "url(#rvGlassA)", opacity: 0.35, filter: true },
+              { d: "M-100,480 C260,240 520,660 830,440 C1160,220 1360,520 1700,400", fill: "none", stroke: "url(#rvGlassA)", width: 22 },
+              { d: "M-100,420 C280,200 540,600 860,400 C1180,190 1380,470 1700,360", fill: "none", stroke: "url(#rvGlassB)", width: 14 },
+              { d: "M-100,370 C300,170 560,540 890,360 C1200,170 1400,420 1700,320", fill: "none", stroke: "url(#rvGlassC)", width: 8 },
+              { d: "M-100,330 C320,150 580,480 920,320 C1220,150 1420,370 1700,280", fill: "none", stroke: "url(#rvGlassA)", width: 3 },
+            ].map((s, i) => (
+              <path key={i} d={s.d} fill={s.fill} stroke={s.stroke} strokeWidth={s.width} opacity={s.opacity ?? 0.8} filter={s.filter ? "url(#rvGlassBlur)" : undefined} />
             ))}
           </svg>
-          <svg className="rvintro-glass-svg" viewBox="0 0 1600 800" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
-            {[0, 40, 80, 120, 160].map((offset, i) => (
-              <path
-                key={i}
-                d={`M-100,${420 - offset} C300,${180 - offset} 600,${640 - offset} 950,${400 - offset} C1250,${190 - offset} 1450,${420 - offset} 1700,${380 - offset}`}
-                fill="none"
-                stroke={i % 2 === 0 ? "url(#rvGlass1)" : "url(#rvGlass2)"}
-                strokeWidth={14 - i * 1.5}
-              />
+          <svg className="rvintro-glass-svg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+            {[
+              { d: "M-100,520 C250,260 500,700 820,480 C1150,250 1350,560 1700,440 L1700,900 L-100,900 Z", fill: "url(#rvGlassA)", opacity: 0.35, filter: true },
+              { d: "M-100,480 C260,240 520,660 830,440 C1160,220 1360,520 1700,400", fill: "none", stroke: "url(#rvGlassA)", width: 22 },
+              { d: "M-100,420 C280,200 540,600 860,400 C1180,190 1380,470 1700,360", fill: "none", stroke: "url(#rvGlassB)", width: 14 },
+              { d: "M-100,370 C300,170 560,540 890,360 C1200,170 1400,420 1700,320", fill: "none", stroke: "url(#rvGlassC)", width: 8 },
+              { d: "M-100,330 C320,150 580,480 920,320 C1220,150 1420,370 1700,280", fill: "none", stroke: "url(#rvGlassA)", width: 3 },
+            ].map((s, i) => (
+              <path key={i} d={s.d} fill={s.fill} stroke={s.stroke} strokeWidth={s.width} opacity={s.opacity ?? 0.8} filter={s.filter ? "url(#rvGlassBlur)" : undefined} />
             ))}
           </svg>
         </div>
@@ -187,7 +196,7 @@ const CSS = `
 }
 .rvintro-glass-waves{
   position:fixed; inset:0; z-index:1; pointer-events:none; overflow:hidden;
-  mix-blend-mode:screen; opacity:0.85;
+  mix-blend-mode:screen; opacity:1;
 }
 .rvintro-glass-track{
   position:absolute; top:0; left:0; height:100%; width:200%;
