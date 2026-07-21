@@ -270,8 +270,8 @@ const CSS = `
   position:absolute; inset:0; z-index:1; pointer-events:none; overflow:hidden;
   display:flex; align-items:center; justify-content:center;
   animation:rvintroRibbonSway 12s ease-in-out infinite;
-  -webkit-mask-image:radial-gradient(ellipse 65% 55% at 62% 45%, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.45) 60%, rgba(0,0,0,0.12) 85%);
-  mask-image:radial-gradient(ellipse 65% 55% at 62% 45%, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.45) 60%, rgba(0,0,0,0.12) 85%);
+  -webkit-mask-image:radial-gradient(ellipse 60% 55% at 50% 46%, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.45) 60%, rgba(0,0,0,0.12) 85%);
+  mask-image:radial-gradient(ellipse 60% 55% at 50% 46%, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.45) 60%, rgba(0,0,0,0.12) 85%);
 }
 @keyframes rvintroRibbonSway{
   0%,100%{ transform:translate(0,0) scale(1); }
