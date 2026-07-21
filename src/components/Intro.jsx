@@ -32,7 +32,6 @@ export default function Intro({ onContinue }) {
   const [msgIndex, setMsgIndex] = useState(0);
   const [show, setShow] = useState(true);
   const pageRef = useRef(null);
-  const logoRef = useRef(null);
   const [particles] = useState(() =>
     Array.from({ length: 16 }, () => ({
       left: Math.random() * 100,
@@ -70,17 +69,6 @@ export default function Intro({ onContinue }) {
     el.style.setProperty("--rv-glow", "0");
   };
 
-  const handleLogoMove = (e) => {
-    const el = logoRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const nx = ((e.clientX - rect.left) / rect.width) * 100;
-    const ny = ((e.clientY - rect.top) / rect.height) * 100;
-    el.style.setProperty("--logo-x", `${nx}%`);
-    el.style.setProperty("--logo-y", `${ny}%`);
-    el.style.setProperty("--logo-hue", `${nx * 3.6}deg`);
-  };
-
   const msg = MESSAGES[msgIndex];
 
   return (
@@ -88,6 +76,40 @@ export default function Intro({ onContinue }) {
       <style>{CSS}</style>
       <div className="rvintro-bg" />
       <div className="rvintro-bg-overlay" />
+      <div className="rvintro-silk-wave">
+        <svg viewBox="0 0 1440 800" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="rvSilkA" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#1E4FD8" stopOpacity="0" />
+              <stop offset="50%" stopColor="#6FA8FF" stopOpacity="0.9" />
+              <stop offset="100%" stopColor="#2F6FED" stopOpacity="0" />
+            </linearGradient>
+            <linearGradient id="rvSilkB" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#2F6FED" stopOpacity="0" />
+              <stop offset="50%" stopColor="#AEC1E8" stopOpacity="0.7" />
+              <stop offset="100%" stopColor="#1E4FD8" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          <path className="rvintro-silk-path rvintro-silk-path1" fill="none" stroke="url(#rvSilkA)" strokeWidth="3" strokeLinecap="round">
+            <animate attributeName="d" dur="9s" repeatCount="indefinite"
+              values="M-100,320 C 260,220 480,420 760,300 C 1040,180 1260,360 1540,260;
+                      M-100,300 C 260,420 480,220 760,360 C 1040,420 1260,220 1540,340;
+                      M-100,320 C 260,220 480,420 760,300 C 1040,180 1260,360 1540,260" />
+          </path>
+          <path className="rvintro-silk-path rvintro-silk-path2" fill="none" stroke="url(#rvSilkB)" strokeWidth="2" strokeLinecap="round">
+            <animate attributeName="d" dur="12s" repeatCount="indefinite"
+              values="M-100,420 C 220,500 520,320 760,420 C 1000,520 1300,340 1540,440;
+                      M-100,440 C 220,340 520,500 760,400 C 1000,320 1300,500 1540,360;
+                      M-100,420 C 220,500 520,320 760,420 C 1000,520 1300,340 1540,440" />
+          </path>
+          <path className="rvintro-silk-path rvintro-silk-path3" fill="none" stroke="url(#rvSilkA)" strokeWidth="1.5" strokeLinecap="round" opacity="0.6">
+            <animate attributeName="d" dur="15s" repeatCount="indefinite"
+              values="M-100,220 C 300,140 560,300 820,200 C 1080,100 1320,260 1540,180;
+                      M-100,240 C 300,300 560,140 820,240 C 1080,300 1320,140 1540,220;
+                      M-100,220 C 300,140 560,300 820,200 C 1080,100 1320,260 1540,180" />
+          </path>
+        </svg>
+      </div>
       <div className="rvintro-orb rvintro-orb1" />
       <div className="rvintro-orb rvintro-orb2" />
       <div className="rvintro-orb rvintro-orb3" />
@@ -118,11 +140,7 @@ export default function Intro({ onContinue }) {
         </div>
 
         <div className="rvintro-hero-logo-wrap">
-          <div
-            className="rvintro-logo-inner"
-            ref={logoRef}
-            onMouseMove={handleLogoMove}
-          >
+          <div className="rvintro-logo-inner">
             <LogoMark size={110} dark={true} showWord={false} />
           </div>
         </div>
@@ -206,6 +224,20 @@ const CSS = `
   position:fixed; inset:0; z-index:0;
   background:linear-gradient(180deg, rgba(5,15,34,0.5), rgba(5,15,34,0.82) 65%, rgba(5,15,34,0.94));
 }
+.rvintro-silk-wave{
+  position:fixed; inset:0; z-index:0; overflow:hidden; pointer-events:none;
+  opacity:0.55; mix-blend-mode:screen;
+}
+.rvintro-silk-wave svg{ width:100%; height:100%; display:block; }
+.rvintro-silk-path{ filter:blur(1.5px) drop-shadow(0 0 14px rgba(47,111,237,0.55)); animation:rvintroSilkDrift 22s ease-in-out infinite; }
+.rvintro-silk-path1{ animation-duration:20s; }
+.rvintro-silk-path2{ animation-duration:26s; animation-direction:reverse; }
+.rvintro-silk-path3{ animation-duration:30s; }
+@keyframes rvintroSilkDrift{
+  0%{ transform:translateX(0) translateY(0); }
+  50%{ transform:translateX(-2.5%) translateY(10px); }
+  100%{ transform:translateX(0) translateY(0); }
+}
 .rvintro-particles{ position:fixed; inset:0; z-index:0; pointer-events:none; overflow:hidden; }
 .rvintro-particle{
   position:absolute; bottom:-20px; width:4px; height:4px; border-radius:50%;
@@ -253,24 +285,7 @@ const CSS = `
   position:relative; display:flex; align-items:center; justify-content:center;
   padding:22px 0 6px; opacity:0; animation:rvintroFadeUp 0.8s ease forwards 0.12s;
 }
-.rvintro-logo-inner{ position:relative; z-index:2; transition:filter 0.15s ease; }
-.rvintro-logo-inner::before,
-.rvintro-logo-inner::after{
-  content:""; position:absolute; inset:-16%; z-index:3; pointer-events:none;
-  border-radius:50%; opacity:0; transition:opacity 0.5s ease;
-}
-.rvintro-logo-inner::before{
-  background:conic-gradient(from 90deg, var(--royal), var(--sky), #ffffff, var(--azure), var(--slate), var(--royal));
-  mix-blend-mode:color;
-  filter:hue-rotate(var(--logo-hue, 0deg));
-  transition:opacity 0.5s ease, filter 0.15s ease;
-}
-.rvintro-logo-inner::after{
-  background:radial-gradient(circle at var(--logo-x, 50%) var(--logo-y, 50%), rgba(255,255,255,0.95), rgba(255,255,255,0) 60%);
-  mix-blend-mode:soft-light;
-}
-.rvintro-hero-logo-wrap:hover .rvintro-logo-inner::before,
-.rvintro-hero-logo-wrap:hover .rvintro-logo-inner::after{ opacity:1; }
+.rvintro-logo-inner{ position:relative; z-index:2; }
 
 .rvintro-main-grid{ flex:1; display:grid; grid-template-columns:1.2fr 0.95fr; gap:clamp(24px,4vw,56px); align-items:center; padding:clamp(20px,3vh,36px) 0; }
 @media (max-width:760px){ .rvintro-main-grid{grid-template-columns:1fr;} }
