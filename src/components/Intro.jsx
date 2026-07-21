@@ -1,6 +1,21 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { ShieldCheck, TrendingUp, ClipboardList, Lock, ArrowRight } from "lucide-react";
 import { LogoMark } from "./ui";
+
+const WATERMARKS = [
+  { text: "SECURE", top: "10%", left: "10%" },
+  { text: "TRUSTED", top: "8%", left: "62%" },
+  { text: "REAL-TIME", top: "20%", left: "38%" },
+  { text: "RELIABLE", top: "34%", left: "6%" },
+  { text: "CONSISTENT", top: "40%", left: "56%" },
+  { text: "PROTECTED", top: "48%", left: "22%" },
+  { text: "ACCURATE", top: "62%", left: "8%" },
+  { text: "ENCRYPTED", top: "58%", left: "64%" },
+  { text: "ERROR-FREE", top: "28%", left: "78%" },
+  { text: "VERIFIED", top: "34%", left: "88%" },
+  { text: "PRECISE", top: "70%", left: "48%" },
+  { text: "AUDIT-READY", top: "78%", left: "72%" },
+];
 
 const MESSAGES = [
   { text: "Hi!", emotion: "happy" },
@@ -19,6 +34,7 @@ const ADVANTAGES = [
 export default function Intro({ onContinue }) {
   const [msgIndex, setMsgIndex] = useState(0);
   const [show, setShow] = useState(true);
+  const pageRef = useRef(null);
   const [particles] = useState(() =>
     Array.from({ length: 16 }, () => ({
       left: Math.random() * 100,
@@ -39,15 +55,41 @@ export default function Intro({ onContinue }) {
     return () => clearInterval(t);
   }, []);
 
+  const handlePointerMove = (e) => {
+    const el = pageRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    el.style.setProperty("--rv-mx", `${x}px`);
+    el.style.setProperty("--rv-my", `${y}px`);
+    el.style.setProperty("--rv-glow", "1");
+  };
+
+  const handlePointerLeave = () => {
+    const el = pageRef.current;
+    if (!el) return;
+    el.style.setProperty("--rv-glow", "0");
+  };
+
   const msg = MESSAGES[msgIndex];
 
   return (
-    <div className="rvintro-page">
+    <div className="rvintro-page" ref={pageRef} onMouseMove={handlePointerMove} onMouseLeave={handlePointerLeave}>
       <style>{CSS}</style>
       <div className="rvintro-bg" />
       <div className="rvintro-orb rvintro-orb1" />
       <div className="rvintro-orb rvintro-orb2" />
       <div className="rvintro-orb rvintro-orb3" />
+
+      <div className="rvintro-watermarks">
+        {WATERMARKS.map((w, i) => (
+          <span key={i} className="rvintro-watermark-word" style={{ top: w.top, left: w.left }}>
+            {w.text}
+          </span>
+        ))}
+      </div>
+
 
       <div className="rvintro-particles">
         {particles.map((p, i) => (
@@ -163,6 +205,18 @@ const CSS = `
 @keyframes rvintroFloat1{0%,100%{transform:translate(0,0);}50%{transform:translate(50px,40px);}}
 @keyframes rvintroFloat2{0%,100%{transform:translate(0,0);}50%{transform:translate(-45px,-35px);}}
 @keyframes rvintroFloat3{0%,100%{transform:translate(0,0) scale(1);}50%{transform:translate(-25px,30px) scale(1.12);}}
+
+.rvintro-watermarks{
+  position:fixed; inset:0; z-index:1; overflow:hidden; pointer-events:none;
+  --rv-mx:50%; --rv-my:50%; --rv-glow:0;
+  -webkit-mask-image: radial-gradient(circle 160px at var(--rv-mx) var(--rv-my), rgba(0,0,0,calc(var(--rv-glow) * 1)) 0%, rgba(0,0,0,calc(var(--rv-glow) * 0.35)) 55%, rgba(0,0,0,0) 100%);
+  mask-image: radial-gradient(circle 160px at var(--rv-mx) var(--rv-my), rgba(0,0,0,calc(var(--rv-glow) * 1)) 0%, rgba(0,0,0,calc(var(--rv-glow) * 0.35)) 55%, rgba(0,0,0,0) 100%);
+}
+.rvintro-watermark-word{
+  position:absolute; transform:translate(-50%,-50%);
+  font-size:clamp(18px,2.6vw,30px); font-weight:800; letter-spacing:0.1em; text-transform:uppercase;
+  color:rgba(255,255,255,0.85); white-space:nowrap; text-shadow:0 0 18px rgba(111,168,255,0.6);
+}
 
 .rvintro-stage{position:relative; z-index:2; flex:1; display:flex; flex-direction:column; width:100%; max-width:1180px; margin:0 auto; padding:clamp(24px,4vh,44px) clamp(20px,5vw,48px) 0;}
 .rvintro-top-row{display:flex; justify-content:space-between; align-items:center; padding-bottom:8px;}
