@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { ShieldCheck, TrendingUp, ClipboardList, Lock, ArrowRight } from "lucide-react";
 import { LogoMark } from "./ui";
 
@@ -16,6 +16,31 @@ const ADVANTAGES = [
   { icon: Lock, title: "Bank-Grade Security", desc: "256-bit encryption on every record, always." },
 ];
 
+/* Same "trust" words / spotlight effect used on the Login screen. */
+const HIDDEN_WORDS = [
+  "SECURE", "VERIFIED", "ACCURATE", "ERROR-FREE", "ENCRYPTED", "REAL-TIME",
+  "TRUSTED", "AUDIT-READY", "PRECISE", "RELIABLE", "TRANSPARENT", "PROTECTED",
+  "INSTANT", "CONSISTENT",
+];
+
+function useHiddenWords(count = 14) {
+  const [words] = useState(() => {
+    const arr = [];
+    for (let i = 0; i < count; i++) {
+      arr.push({
+        id: i,
+        text: HIDDEN_WORDS[i % HIDDEN_WORDS.length],
+        size: 15 + Math.random() * 24,
+        top: 4 + Math.random() * 90,
+        left: 2 + Math.random() * 82,
+        rot: (Math.random() * 16 - 8).toFixed(1),
+      });
+    }
+    return arr;
+  });
+  return words;
+}
+
 export default function Intro({ onContinue }) {
   const [msgIndex, setMsgIndex] = useState(0);
   const [show, setShow] = useState(true);
@@ -27,6 +52,39 @@ export default function Intro({ onContinue }) {
       dx: Math.random() * 80 - 40,
     }))
   );
+  const words = useHiddenWords(14);
+  const brightRef = useRef(null);
+  const mouseRef = useRef({
+    x: typeof window !== "undefined" ? window.innerWidth / 2 : 0,
+    y: typeof window !== "undefined" ? window.innerHeight / 2 : 0,
+  });
+  const curRef = useRef({ ...mouseRef.current });
+
+  useEffect(() => {
+    const onMove = (e) => { mouseRef.current = { x: e.clientX, y: e.clientY }; };
+    const onTouch = (e) => {
+      if (e.touches && e.touches[0]) mouseRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    };
+    window.addEventListener("mousemove", onMove, { passive: true });
+    window.addEventListener("touchmove", onTouch, { passive: true });
+    let raf;
+    const loop = () => {
+      const c = curRef.current, m = mouseRef.current;
+      c.x += (m.x - c.x) * 0.18;
+      c.y += (m.y - c.y) * 0.18;
+      if (brightRef.current) {
+        brightRef.current.style.setProperty("--mx", c.x + "px");
+        brightRef.current.style.setProperty("--my", c.y + "px");
+      }
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("touchmove", onTouch);
+      cancelAnimationFrame(raf);
+    };
+  }, []);
 
   useEffect(() => {
     const t = setInterval(() => {
@@ -73,7 +131,6 @@ export default function Intro({ onContinue }) {
               </filter>
             </defs>
             {[
-              { d: "M-100,520 C250,260 500,700 820,480 C1150,250 1350,560 1700,440 L1700,900 L-100,900 Z", fill: "url(#rvGlassA)", opacity: 0.35, filter: true },
               { d: "M-100,480 C260,240 520,660 830,440 C1160,220 1360,520 1700,400", fill: "none", stroke: "url(#rvGlassA)", width: 22 },
               { d: "M-100,420 C280,200 540,600 860,400 C1180,190 1380,470 1700,360", fill: "none", stroke: "url(#rvGlassB)", width: 14 },
               { d: "M-100,370 C300,170 560,540 890,360 C1200,170 1400,420 1700,320", fill: "none", stroke: "url(#rvGlassC)", width: 8 },
@@ -84,7 +141,6 @@ export default function Intro({ onContinue }) {
           </svg>
           <svg className="rvintro-glass-svg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
             {[
-              { d: "M-100,520 C250,260 500,700 820,480 C1150,250 1350,560 1700,440 L1700,900 L-100,900 Z", fill: "url(#rvGlassA)", opacity: 0.35, filter: true },
               { d: "M-100,480 C260,240 520,660 830,440 C1160,220 1360,520 1700,400", fill: "none", stroke: "url(#rvGlassA)", width: 22 },
               { d: "M-100,420 C280,200 540,600 860,400 C1180,190 1380,470 1700,360", fill: "none", stroke: "url(#rvGlassB)", width: 14 },
               { d: "M-100,370 C300,170 560,540 890,360 C1200,170 1400,420 1700,320", fill: "none", stroke: "url(#rvGlassC)", width: 8 },
@@ -106,6 +162,17 @@ export default function Intro({ onContinue }) {
             className="rvintro-particle"
             style={{ left: `${p.left}vw`, animationDuration: `${p.dur}s`, animationDelay: `${p.delay}s`, "--dx": `${p.dx}px` }}
           />
+        ))}
+      </div>
+
+      <div className="rvintro-words-dim">
+        {words.map(w => (
+          <div key={w.id} className="rvintro-hword" style={{ fontSize: w.size, top: w.top + "vh", left: w.left + "vw", transform: `rotate(${w.rot}deg)` }}>{w.text}</div>
+        ))}
+      </div>
+      <div className="rvintro-words-bright" ref={brightRef}>
+        {words.map(w => (
+          <div key={w.id} className="rvintro-hword" style={{ fontSize: w.size, top: w.top + "vh", left: w.left + "vw", transform: `rotate(${w.rot}deg)` }}>{w.text}</div>
         ))}
       </div>
 
@@ -197,6 +264,8 @@ const CSS = `
 .rvintro-glass-waves{
   position:fixed; inset:0; z-index:1; pointer-events:none; overflow:hidden;
   mix-blend-mode:screen; opacity:1;
+  -webkit-mask-image:linear-gradient(90deg, rgba(0,0,0,0.22) 0%, rgba(0,0,0,0.4) 38%, rgba(0,0,0,0.85) 62%, rgba(0,0,0,1) 100%);
+  mask-image:linear-gradient(90deg, rgba(0,0,0,0.22) 0%, rgba(0,0,0,0.4) 38%, rgba(0,0,0,0.85) 62%, rgba(0,0,0,1) 100%);
 }
 .rvintro-glass-track{
   position:absolute; top:0; left:0; height:100%; width:200%;
@@ -206,6 +275,15 @@ const CSS = `
 @keyframes rvintroGlassDrift{ from{ transform:translateX(0); } to{ transform:translateX(-50%); } }
 
 .rvintro-particles{ position:fixed; inset:0; z-index:0; pointer-events:none; overflow:hidden; }
+
+.rvintro-words-dim{ position:fixed; inset:0; z-index:1; pointer-events:none; overflow:hidden; }
+.rvintro-hword{ position:absolute; font-weight:800; letter-spacing:0.02em; color:rgba(255,255,255,0.045); white-space:nowrap; user-select:none; }
+.rvintro-words-bright{
+  position:fixed; inset:0; z-index:1; pointer-events:none; overflow:hidden;
+  -webkit-mask-image:radial-gradient(circle 170px at var(--mx,50%) var(--my,50%), black 0%, transparent 100%);
+  mask-image:radial-gradient(circle 170px at var(--mx,50%) var(--my,50%), black 0%, transparent 100%);
+}
+.rvintro-words-bright .rvintro-hword{ color:var(--sky); text-shadow:0 0 18px rgba(111,168,255,0.85), 0 0 40px rgba(47,111,237,0.4); }
 .rvintro-particle{
   position:absolute; bottom:-20px; width:4px; height:4px; border-radius:50%;
   background:var(--azure); opacity:0.4; animation-name:rvintroDrift; animation-timing-function:linear; animation-iteration-count:infinite;
