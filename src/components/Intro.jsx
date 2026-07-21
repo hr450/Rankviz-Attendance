@@ -3,10 +3,10 @@ import { ShieldCheck, TrendingUp, ClipboardList, Lock, ArrowRight } from "lucide
 import { LogoMark } from "./ui";
 
 const MESSAGES = [
-  { text: "Hi! 👋", emotion: "happy" },
-  { text: "Hi employee, please punch your attendance! ⏰", emotion: "alert" },
+  { text: "Hi!", emotion: "happy" },
+  { text: "Hi employee, please punch your attendance!", emotion: "alert" },
   { text: "RankViz never forgets a check-in.", emotion: "calm" },
-  { text: "One tap. Fully verified. ✅", emotion: "excited" },
+  { text: "One tap. Fully verified.", emotion: "excited" },
 ];
 
 const ADVANTAGES = [
@@ -43,7 +43,7 @@ export default function Intro({ onContinue }) {
 
       <div className="rvintro-stage">
         <div className="rvintro-top-row">
-          <div className="rvintro-brand"><LogoMark size={36} dark={true} showWord={true} /></div>
+          <div className="rvintro-brand"><LogoMark size={36} dark={true} showWord={false} /></div>
           <div className="rvintro-status-chip"><span className="rvintro-dot" /> Live &amp; verifying</div>
         </div>
 
@@ -78,6 +78,9 @@ export default function Intro({ onContinue }) {
                     <div className="rvintro-robot-eye" />
                     <div className="rvintro-robot-eye" />
                   </div>
+                  <div className="rvintro-robot-mouth" />
+                  <div className="rvintro-robot-blush rvintro-robot-blush-l" />
+                  <div className="rvintro-robot-blush rvintro-robot-blush-r" />
                 </div>
                 <div className="rvintro-robot-body">
                   <div className="rvintro-robot-chest"><span/></div>
@@ -91,9 +94,9 @@ export default function Intro({ onContinue }) {
 
         <div className="rvintro-bottom-cta">
           <button className="rvintro-cta" onClick={onContinue}>
-            Sign In Now <ArrowRight size={15} />
+            Sign Up <ArrowRight size={15} />
           </button>
-          <button className="rvintro-skip" onClick={onContinue}>Skip intro</button>
+          <button className="rvintro-skip" onClick={onContinue}>Skip</button>
         </div>
       </div>
     </div>
@@ -177,12 +180,62 @@ const CSS = `
 .rvintro-robot-antenna{ position:absolute; top:-16px; left:50%; transform:translateX(-50%); width:3px; height:18px; background:var(--sky); }
 .rvintro-robot-antenna::after{ content:''; position:absolute; top:-7px; left:50%; transform:translateX(-50%); width:10px; height:10px; border-radius:50%; background:var(--mint); box-shadow:0 0 12px var(--mint); }
 .rvintro-robot-head{ width:90px; height:64px; margin:20px auto 0; border-radius:22px; background:linear-gradient(155deg, #E7EFFC, #BFDAFF); position:relative; box-shadow:0 14px 28px -10px rgba(3,10,25,0.5); }
-.rvintro-robot-face{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; gap:14px; }
-.rvintro-robot-eye{ width:12px; height:16px; border-radius:6px; background:var(--navy-900); }
+.rvintro-robot-face{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; gap:14px; transition:gap 0.3s ease; }
+.rvintro-robot-eye{ width:12px; height:16px; border-radius:6px; background:var(--navy-900); transition:all 0.3s ease; }
+.rvintro-robot-mouth{
+  position:absolute; bottom:10px; left:50%; transform:translateX(-50%);
+  width:14px; height:2px; border-radius:2px; background:var(--navy-900);
+  opacity:0.85; transition:all 0.3s ease;
+}
+.rvintro-robot-blush{
+  position:absolute; bottom:16px; width:9px; height:6px; border-radius:50%;
+  background:#FF9AA6; opacity:0; transition:opacity 0.3s ease;
+}
+.rvintro-robot-blush-l{ left:10px; }
+.rvintro-robot-blush-r{ right:10px; }
 .rvintro-robot-body{ width:102px; height:50px; margin:6px auto 0; border-radius:18px; background:linear-gradient(155deg, #DCE9FB, #9FC4FF); display:flex; align-items:center; justify-content:center; }
 .rvintro-robot-chest{ width:34px; height:34px; border-radius:50%; background:rgba(30,79,216,0.16); border:2px solid var(--royal); display:flex; align-items:center; justify-content:center; }
 .rvintro-robot-chest span{ width:14px; height:14px; border-radius:50%; background:var(--mint); box-shadow:0 0 10px var(--mint); animation:rvintroChestPulse 1.8s ease-in-out infinite; }
 @keyframes rvintroChestPulse{0%,100%{transform:scale(1); opacity:1;}50%{transform:scale(1.25); opacity:0.7;}}
+
+/* ---- Emotion states ---- */
+
+/* happy — smiling eyes, curved grin, rosy cheeks */
+.rvintro-emotion-happy .rvintro-robot-eye{ height:6px; border-radius:6px 6px 3px 3px; transform:translateY(3px); }
+.rvintro-emotion-happy .rvintro-robot-mouth{
+  width:22px; height:11px; border-radius:0 0 16px 16px; background:transparent;
+  border:2px solid var(--navy-900); border-top:none;
+}
+.rvintro-emotion-happy .rvintro-robot-blush{ opacity:0.9; }
+.rvintro-emotion-happy .rvintro-robot-antenna::after{ background:var(--mint); box-shadow:0 0 14px var(--mint); }
+
+/* alert — wide eyes, small o-mouth, amber antenna blink, tiny head shake */
+.rvintro-emotion-alert .rvintro-robot-eye{ height:19px; width:10px; border-radius:5px; }
+.rvintro-emotion-alert .rvintro-robot-mouth{
+  width:9px; height:9px; border-radius:50%; background:transparent; border:2px solid var(--navy-900);
+}
+.rvintro-emotion-alert .rvintro-robot-head{ animation:rvintroShake 0.5s ease-in-out; }
+.rvintro-emotion-alert .rvintro-robot-antenna::after{
+  background:#FFB020; box-shadow:0 0 14px #FFB020; animation:rvintroAlertBlink 0.55s ease-in-out infinite;
+}
+@keyframes rvintroShake{ 0%,100%{transform:translateX(0);} 25%{transform:translateX(-2.5px);} 75%{transform:translateX(2.5px);} }
+@keyframes rvintroAlertBlink{ 0%,100%{opacity:1;} 50%{opacity:0.35;} }
+
+/* calm — neutral flat gaze, relaxed slow float */
+.rvintro-emotion-calm .rvintro-robot-eye{ height:14px; }
+.rvintro-emotion-calm .rvintro-robot-mouth{ width:12px; height:2px; }
+.rvintro-emotion-calm.rvintro-robot{ animation-duration:4.4s; }
+
+/* excited — wide sparkly eyes, big grin, faster bounce + pulse */
+.rvintro-emotion-excited .rvintro-robot-eye{ height:17px; border-radius:8px; box-shadow:0 0 6px rgba(111,168,255,0.8); }
+.rvintro-emotion-excited .rvintro-robot-mouth{
+  width:26px; height:13px; border-radius:0 0 18px 18px; background:transparent;
+  border:2.5px solid var(--navy-900); border-top:none;
+}
+.rvintro-emotion-excited .rvintro-robot-blush{ opacity:0.9; }
+.rvintro-emotion-excited.rvintro-robot{ animation-duration:1.7s; }
+.rvintro-emotion-excited .rvintro-robot-chest span{ animation-duration:0.8s; }
+.rvintro-emotion-excited .rvintro-robot-antenna::after{ animation:rvintroChestPulse 0.7s ease-in-out infinite; }
 
 .rvintro-robot-message{
   margin-top:22px; background:rgba(255,255,255,0.08); border:1px solid rgba(111,168,255,0.3);
