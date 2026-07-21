@@ -19,6 +19,14 @@ const ADVANTAGES = [
 export default function Intro({ onContinue }) {
   const [msgIndex, setMsgIndex] = useState(0);
   const [show, setShow] = useState(true);
+  const [particles] = useState(() =>
+    Array.from({ length: 16 }, () => ({
+      left: Math.random() * 100,
+      dur: 8 + Math.random() * 10,
+      delay: Math.random() * 10,
+      dx: Math.random() * 80 - 40,
+    }))
+  );
 
   useEffect(() => {
     const t = setInterval(() => {
@@ -40,6 +48,16 @@ export default function Intro({ onContinue }) {
       <div className="rvintro-orb rvintro-orb1" />
       <div className="rvintro-orb rvintro-orb2" />
       <div className="rvintro-orb rvintro-orb3" />
+
+      <div className="rvintro-particles">
+        {particles.map((p, i) => (
+          <span
+            key={i}
+            className="rvintro-particle"
+            style={{ left: `${p.left}vw`, animationDuration: `${p.dur}s`, animationDelay: `${p.delay}s`, "--dx": `${p.dx}px` }}
+          />
+        ))}
+      </div>
 
       <div className="rvintro-stage">
         <div className="rvintro-top-row">
@@ -74,6 +92,8 @@ export default function Intro({ onContinue }) {
               <div className={`rvintro-robot rvintro-emotion-${msg.emotion}`}>
                 <div className="rvintro-robot-antenna" />
                 <div className="rvintro-robot-head">
+                  <div className="rvintro-robot-eyebrow rvintro-robot-eyebrow-l" />
+                  <div className="rvintro-robot-eyebrow rvintro-robot-eyebrow-r" />
                   <div className="rvintro-robot-face">
                     <div className="rvintro-robot-eye" />
                     <div className="rvintro-robot-eye" />
@@ -84,19 +104,21 @@ export default function Intro({ onContinue }) {
                 </div>
                 <div className="rvintro-robot-body">
                   <div className="rvintro-robot-chest"><span/></div>
+                  <div className="rvintro-robot-arm rvintro-robot-arm-l" />
+                  <div className="rvintro-robot-arm rvintro-robot-arm-r" />
                 </div>
               </div>
               <div className={`rvintro-robot-message${show ? " show" : ""}`}>{msg.text}</div>
               <div className="rvintro-panel-caption">Your attendance assistant, always on.</div>
             </div>
-          </div>
-        </div>
 
-        <div className="rvintro-bottom-cta">
-          <button className="rvintro-cta" onClick={onContinue}>
-            Sign Up <ArrowRight size={15} />
-          </button>
-          <button className="rvintro-skip" onClick={onContinue}>Skip</button>
+            <div className="rvintro-robot-cta">
+              <button className="rvintro-cta" onClick={onContinue}>
+                Sign Up <ArrowRight size={15} />
+              </button>
+              <button className="rvintro-skip" onClick={onContinue}>Skip</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -122,6 +144,18 @@ const CSS = `
 @keyframes rvintroBgshift{
   0%{background-position:0% 20%;} 50%{background-position:100% 80%;} 100%{background-position:0% 20%;}
 }
+.rvintro-particles{ position:fixed; inset:0; z-index:0; pointer-events:none; overflow:hidden; }
+.rvintro-particle{
+  position:absolute; bottom:-20px; width:4px; height:4px; border-radius:50%;
+  background:var(--azure); opacity:0.4; animation-name:rvintroDrift; animation-timing-function:linear; animation-iteration-count:infinite;
+}
+@keyframes rvintroDrift{
+  0%{ transform:translateY(0) translateX(0); opacity:0; }
+  10%{ opacity:0.4; }
+  90%{ opacity:0.4; }
+  100%{ transform:translateY(-115vh) translateX(var(--dx,20px)); opacity:0; }
+}
+
 .rvintro-orb{position:fixed; z-index:0; border-radius:50%; filter:blur(50px); pointer-events:none;}
 .rvintro-orb1{width:480px;height:480px; top:-200px; left:-150px; background:radial-gradient(circle, var(--sky), transparent 70%); opacity:0.3; animation:rvintroFloat1 15s ease-in-out infinite;}
 .rvintro-orb2{width:420px;height:420px; bottom:-200px; right:-150px; background:radial-gradient(circle, var(--azure), transparent 70%); opacity:0.2; animation:rvintroFloat2 18s ease-in-out infinite;}
@@ -249,6 +283,11 @@ const CSS = `
 .rvintro-bottom-cta{
   position:relative; z-index:2; padding:20px 20px clamp(28px,4vh,44px);
   display:flex; flex-direction:column; align-items:center; gap:12px;
+  opacity:0; animation:rvintroFadeUp 0.8s ease forwards 0.5s;
+}
+.rvintro-robot-cta{
+  position:relative; z-index:2; margin-top:18px;
+  display:flex; flex-direction:column; align-items:center; gap:10px;
   opacity:0; animation:rvintroFadeUp 0.8s ease forwards 0.5s;
 }
 .rvintro-cta{
