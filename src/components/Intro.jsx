@@ -14,8 +14,6 @@ const WATERMARKS = [
   { text: "RELIABLE", top: "86%", left: "70%" },
 ];
 
-const LOGO_WORDS = ["NO ERROR", "EASY", "RELIABLE", "SECURE", "NO DIFFICULTY", "TURN OUT", "ENROLL"];
-
 const MESSAGES = [
   { text: "Hi!", emotion: "happy" },
   { text: "Hi employee, please punch your attendance!", emotion: "alert" },
@@ -34,6 +32,7 @@ export default function Intro({ onContinue }) {
   const [msgIndex, setMsgIndex] = useState(0);
   const [show, setShow] = useState(true);
   const pageRef = useRef(null);
+  const logoRef = useRef(null);
   const [particles] = useState(() =>
     Array.from({ length: 16 }, () => ({
       left: Math.random() * 100,
@@ -69,6 +68,17 @@ export default function Intro({ onContinue }) {
     const el = pageRef.current;
     if (!el) return;
     el.style.setProperty("--rv-glow", "0");
+  };
+
+  const handleLogoMove = (e) => {
+    const el = logoRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const nx = ((e.clientX - rect.left) / rect.width) * 100;
+    const ny = ((e.clientY - rect.top) / rect.height) * 100;
+    el.style.setProperty("--logo-x", `${nx}%`);
+    el.style.setProperty("--logo-y", `${ny}%`);
+    el.style.setProperty("--logo-hue", `${nx * 3.6}deg`);
   };
 
   const msg = MESSAGES[msgIndex];
@@ -108,18 +118,11 @@ export default function Intro({ onContinue }) {
         </div>
 
         <div className="rvintro-hero-logo-wrap">
-          <div className="rvintro-logo-words">
-            {LOGO_WORDS.map((label, i) => (
-              <span
-                key={i}
-                className={`rvintro-logo-word rvintro-logo-word-size${(i % 3) + 1}`}
-                style={{ transitionDelay: `${i * 40}ms` }}
-              >
-                {label}
-              </span>
-            ))}
-          </div>
-          <div className="rvintro-logo-inner">
+          <div
+            className="rvintro-logo-inner"
+            ref={logoRef}
+            onMouseMove={handleLogoMove}
+          >
             <LogoMark size={110} dark={true} showWord={false} />
           </div>
         </div>
@@ -250,22 +253,24 @@ const CSS = `
   position:relative; display:flex; align-items:center; justify-content:center;
   padding:22px 0 6px; opacity:0; animation:rvintroFadeUp 0.8s ease forwards 0.12s;
 }
-.rvintro-logo-inner{ position:relative; z-index:2; }
-.rvintro-logo-words{
-  position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
-  width:min(90vw,420px); z-index:1; pointer-events:none;
-  display:flex; flex-wrap:wrap; align-items:center; justify-content:center;
-  gap:2px 12px; row-gap:2px;
+.rvintro-logo-inner{ position:relative; z-index:2; transition:filter 0.15s ease; }
+.rvintro-logo-inner::before,
+.rvintro-logo-inner::after{
+  content:""; position:absolute; inset:-16%; z-index:3; pointer-events:none;
+  border-radius:50%; opacity:0; transition:opacity 0.5s ease;
 }
-.rvintro-logo-word{
-  opacity:0; font-weight:800; letter-spacing:0.01em; text-transform:uppercase;
-  color:rgba(111,168,255,0.95); text-shadow:0 0 16px rgba(47,111,237,0.65);
-  white-space:nowrap; line-height:1.15; transition:opacity 0.45s ease;
+.rvintro-logo-inner::before{
+  background:conic-gradient(from 90deg, var(--royal), var(--sky), #ffffff, var(--azure), var(--slate), var(--royal));
+  mix-blend-mode:color;
+  filter:hue-rotate(var(--logo-hue, 0deg));
+  transition:opacity 0.5s ease, filter 0.15s ease;
 }
-.rvintro-logo-word-size1{ font-size:clamp(22px,3vw,32px); }
-.rvintro-logo-word-size2{ font-size:clamp(15px,2vw,21px); }
-.rvintro-logo-word-size3{ font-size:clamp(11px,1.4vw,15px); }
-.rvintro-hero-logo-wrap:hover .rvintro-logo-word{ opacity:1; }
+.rvintro-logo-inner::after{
+  background:radial-gradient(circle at var(--logo-x, 50%) var(--logo-y, 50%), rgba(255,255,255,0.95), rgba(255,255,255,0) 60%);
+  mix-blend-mode:soft-light;
+}
+.rvintro-hero-logo-wrap:hover .rvintro-logo-inner::before,
+.rvintro-hero-logo-wrap:hover .rvintro-logo-inner::after{ opacity:1; }
 
 .rvintro-main-grid{ flex:1; display:grid; grid-template-columns:1.2fr 0.95fr; gap:clamp(24px,4vw,56px); align-items:center; padding:clamp(20px,3vh,36px) 0; }
 @media (max-width:760px){ .rvintro-main-grid{grid-template-columns:1fr;} }
