@@ -158,9 +158,37 @@ function zkIdToEmployeeId(zkUserId) {
 async function findEmployeeByZkId(zkUserId) {
   const empId = zkIdToEmployeeId(zkUserId);
   const rows = await supabaseFetch(
-    `employees?id=eq.${encodeURIComponent(empId)}&select=id`
+    `employees?id=eq.${encodeURIComponent(empId)}&select=id,shift_start,shift_end`
   );
   return rows && rows[0] ? rows[0] : null;
+}
+
+// How much slack past shift_end before we stop trusting a "first punch of
+// the day" as a genuine check-in. Generous on purpose — this only exists to
+// catch the clearly-wrong cases (e.g. someone's only punch of the day is
+// well into the evening), not to second-guess every late arrival.
+const LATE_FIRST_PUNCH_BUFFER_MIN = 120; // 2 hours past shift_end
+
+// Returns a human-readable flag string if `punchTime` looks too late to
+// plausibly be a genuine FIRST check-in for this employee (i.e. it's more
+// likely a checkout with a missed/lost check-in earlier in the day), or
+// null if it looks like a normal check-in. We still SAVE the punch either
+// way (a device event should never be silently dropped) — this only
+// changes whether it's saved silently or flagged for HR to review/correct
+// via /api/attendance/edit.
+function lateFirstPunchFlag(employee, punchTime) {
+  if (!employee || !employee.shift_end) return null;
+  const [endH, endM] = employee.shift_end.split(":").map(Number);
+  if (Number.isNaN(endH) || Number.isNaN(endM)) return null;
+
+  const local = toLocalParts(punchTime);
+  const punchMinutes = local.hour * 60 + punchTime.getUTCMinutes();
+  const shiftEndMinutes = endH * 60 + endM;
+
+  if (punchMinutes >= shiftEndMinutes + LATE_FIRST_PUNCH_BUFFER_MIN) {
+    return `Auto-flag: first punch today was ${employee.shift_end ? `well after shift end (${employee.shift_end})` : "unusually late"} with no prior check-in — likely a missed check-in, not a real one. Review and correct via Monthly Report.`;
+  }
+  return null;
 }
 
 async function autoCreateEmployee(zkUserId, deviceName) {
@@ -214,9 +242,14 @@ async function closeOpenSession(employeeId, dateStr, punchTime, session) {
 // Record `punchTime` as a check-in on `session` ("first" | "second") for
 // `dateStr`. If that session already has a check-in today, this is treated
 // as a duplicate scan rather than overwritten.
-async function recordSessionCheckIn(employeeId, dateStr, punchTime, session) {
+async function recordSessionCheckIn(employeeId, dateStr, punchTime, session, employee) {
   const { in: inField } = SESSION_FIELDS[session];
   const row = await getAttendanceRow(employeeId, dateStr);
+
+  // Only the FIRST session's opening check-in can plausibly be mistaken for
+  // a missed checkout — the second session only ever opens after the first
+  // is already closed, so there's already a same-day check-in on record.
+  const flag = session === "first" ? lateFirstPunchFlag(employee, punchTime) : null;
 
   if (!row) {
     await supabaseFetch("attendance", {
@@ -228,10 +261,11 @@ async function recordSessionCheckIn(employeeId, dateStr, punchTime, session) {
         [inField]: punchTime.toISOString(),
         source: "device",
         type: "office",
+        ...(flag ? { notes: flag } : {}),
         ...DEVICE_WRITE_RESET_FIELDS,
       }),
     });
-    return `${session}_check_in_recorded`;
+    return flag ? `${session}_check_in_recorded_flagged` : `${session}_check_in_recorded`;
   }
 
   if (!row[inField]) {
@@ -240,16 +274,20 @@ async function recordSessionCheckIn(employeeId, dateStr, punchTime, session) {
       {
         method: "PATCH",
         prefer: "return=minimal",
-        body: JSON.stringify({ [inField]: punchTime.toISOString(), ...DEVICE_WRITE_RESET_FIELDS }),
+        body: JSON.stringify({
+          [inField]: punchTime.toISOString(),
+          ...(flag ? { notes: flag } : {}),
+          ...DEVICE_WRITE_RESET_FIELDS,
+        }),
       }
     );
-    return `${session}_check_in_recorded`;
+    return flag ? `${session}_check_in_recorded_flagged` : `${session}_check_in_recorded`;
   }
 
   return "duplicate_ignored";
 }
 
-async function applyPunch(employeeId, punchTime) {
+async function applyPunch(employeeId, punchTime, employee) {
   const { dateStr, hour } = toLocalParts(punchTime);
 
   // --- Rule 1: evening punch (8pm+) — context-aware -----------------------
@@ -261,10 +299,13 @@ async function applyPunch(employeeId, punchTime) {
     if (firstResult === "duplicate") return "duplicate_ignored";
 
     // b) First session hasn't started today at all — genuine (first-
-    //    session) night-shift check-in.
+    //    session) night-shift check-in. Flagged if it's suspiciously late
+    //    for this employee's usual shift (see lateFirstPunchFlag) — most
+    //    often this means they forgot to check in earlier and this evening
+    //    scan was actually meant as their checkout.
     const row = await getAttendanceRow(employeeId, dateStr);
     if (!row || !row.check_in) {
-      return await recordSessionCheckIn(employeeId, dateStr, punchTime, "first");
+      return await recordSessionCheckIn(employeeId, dateStr, punchTime, "first", employee);
     }
 
     // c) First session already fully closed today (check_in + check_out
@@ -340,6 +381,7 @@ async function applyPunch(employeeId, punchTime) {
   const row = await getAttendanceRow(employeeId, dateStr);
 
   if (!row) {
+    const flag = lateFirstPunchFlag(employee, punchTime);
     await supabaseFetch("attendance", {
       method: "POST",
       prefer: "return=minimal",
@@ -349,10 +391,11 @@ async function applyPunch(employeeId, punchTime) {
         check_in: punchTime.toISOString(),
         source: "device",
         type: "office",
+        ...(flag ? { notes: flag } : {}),
         ...DEVICE_WRITE_RESET_FIELDS,
       }),
     });
-    return "check_in_recorded";
+    return flag ? "check_in_recorded_flagged" : "check_in_recorded";
   }
 
   if (row.check_in && !row.check_out) {
@@ -400,15 +443,20 @@ async function applyPunch(employeeId, punchTime) {
   }
 
   if (!row.check_in) {
+    const flag = lateFirstPunchFlag(employee, punchTime);
     await supabaseFetch(
       `attendance?employee_id=eq.${encodeURIComponent(employeeId)}&date=eq.${dateStr}`,
       {
         method: "PATCH",
         prefer: "return=minimal",
-        body: JSON.stringify({ check_in: punchTime.toISOString(), ...DEVICE_WRITE_RESET_FIELDS }),
+        body: JSON.stringify({
+          check_in: punchTime.toISOString(),
+          ...(flag ? { notes: flag } : {}),
+          ...DEVICE_WRITE_RESET_FIELDS,
+        }),
       }
     );
-    return "check_in_recorded";
+    return flag ? "check_in_recorded_flagged" : "check_in_recorded";
   }
 
   // Already has both check_in and check_out -> duplicate punch, ignore.
@@ -435,7 +483,7 @@ async function handleAttlog(body) {
         const newId = await autoCreateEmployee(pin, null);
         employee = { id: newId };
       }
-      await applyPunch(employee.id, punchTime);
+      await applyPunch(employee.id, punchTime, employee);
       processed++;
     } catch (lineErr) {
       errors.push({ line, message: lineErr.message });
