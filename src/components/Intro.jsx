@@ -208,9 +208,8 @@ const CSS = `
 
 .rvintro-watermarks{
   position:fixed; inset:0; z-index:1; overflow:hidden; pointer-events:none;
-  --rv-mx:50%; --rv-my:50%; --rv-glow:0;
-  -webkit-mask-image: radial-gradient(circle 160px at var(--rv-mx) var(--rv-my), rgba(0,0,0,calc(var(--rv-glow) * 1)) 0%, rgba(0,0,0,calc(var(--rv-glow) * 0.35)) 55%, rgba(0,0,0,0) 100%);
-  mask-image: radial-gradient(circle 160px at var(--rv-mx) var(--rv-my), rgba(0,0,0,calc(var(--rv-glow) * 1)) 0%, rgba(0,0,0,calc(var(--rv-glow) * 0.35)) 55%, rgba(0,0,0,0) 100%);
+  -webkit-mask-image: radial-gradient(circle 160px at var(--rv-mx, 50%) var(--rv-my, 50%), rgba(0,0,0,calc(var(--rv-glow, 0) * 1)) 0%, rgba(0,0,0,calc(var(--rv-glow, 0) * 0.35)) 55%, rgba(0,0,0,0) 100%);
+  mask-image: radial-gradient(circle 160px at var(--rv-mx, 50%) var(--rv-my, 50%), rgba(0,0,0,calc(var(--rv-glow, 0) * 1)) 0%, rgba(0,0,0,calc(var(--rv-glow, 0) * 0.35)) 55%, rgba(0,0,0,0) 100%);
 }
 .rvintro-watermark-word{
   position:absolute; transform:translate(-50%,-50%);
