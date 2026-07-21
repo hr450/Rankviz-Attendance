@@ -11,6 +11,7 @@ import {
 import { notifyHR } from "./lib/email";
 
 import Splash from "./components/Splash";
+import Intro from "./components/Intro";
 import Login from "./components/Login";
 import Shell from "./components/Shell";
 
@@ -25,7 +26,7 @@ import LeaveSummaryView from "./views/LeaveSummary";
 import LeaveBalancesView from "./views/LeaveBalances";
 
 export default function App() {
-  const [stage, setStage] = useState("boot"); // boot -> login -> entering -> app
+  const [stage, setStage] = useState("intro"); // intro -> boot -> login -> entering -> app
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
 
@@ -199,6 +200,7 @@ export default function App() {
   if (!SUPABASE_CONFIGURED) return <ConfigNotice />;
   if (loadError) return <ErrorNotice message={loadError} />;
 
+  if (stage === "intro") return <Intro onContinue={() => setStage("boot")} />;
   if (stage === "boot") return <Splash onDone={() => setStage("login")} />;
   if (stage === "login") return <Login onLogin={handleLogin} />;
   if (stage === "entering") {
