@@ -103,53 +103,58 @@ export default function Intro({ onContinue }) {
     <div className="rvintro-page">
       <style>{CSS}</style>
       <div className="rvintro-bg" />
-      <div className="rvintro-glass-waves">
-        <div className="rvintro-glass-track">
-          <svg className="rvintro-glass-svg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-              <linearGradient id="rvGlassA" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stopColor="#ffffff" stopOpacity="0"/>
-                <stop offset="30%" stopColor="#EAF2FF" stopOpacity="0.85"/>
-                <stop offset="55%" stopColor="#6FA8FF" stopOpacity="0.9"/>
-                <stop offset="80%" stopColor="#1E4FD8" stopOpacity="0.6"/>
-                <stop offset="100%" stopColor="#0A1E42" stopOpacity="0"/>
-              </linearGradient>
-              <linearGradient id="rvGlassB" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stopColor="#0A1E42" stopOpacity="0"/>
-                <stop offset="35%" stopColor="#2F6FED" stopOpacity="0.55"/>
-                <stop offset="60%" stopColor="#ffffff" stopOpacity="0.7"/>
-                <stop offset="100%" stopColor="#0A1E42" stopOpacity="0"/>
-              </linearGradient>
-              <linearGradient id="rvGlassC" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stopColor="#0A1E42" stopOpacity="0"/>
-                <stop offset="40%" stopColor="#AEC1E8" stopOpacity="0.55"/>
-                <stop offset="70%" stopColor="#3D7DFF" stopOpacity="0.5"/>
-                <stop offset="100%" stopColor="#0A1E42" stopOpacity="0"/>
-              </linearGradient>
-              <filter id="rvGlassBlur" x="-30%" y="-30%" width="160%" height="160%">
-                <feGaussianBlur stdDeviation="6"/>
-              </filter>
-            </defs>
-            {[
-              { d: "M-100,480 C260,240 520,660 830,440 C1160,220 1360,520 1700,400", fill: "none", stroke: "url(#rvGlassA)", width: 22 },
-              { d: "M-100,420 C280,200 540,600 860,400 C1180,190 1380,470 1700,360", fill: "none", stroke: "url(#rvGlassB)", width: 14 },
-              { d: "M-100,370 C300,170 560,540 890,360 C1200,170 1400,420 1700,320", fill: "none", stroke: "url(#rvGlassC)", width: 8 },
-              { d: "M-100,330 C320,150 580,480 920,320 C1220,150 1420,370 1700,280", fill: "none", stroke: "url(#rvGlassA)", width: 3 },
-            ].map((s, i) => (
-              <path key={i} d={s.d} fill={s.fill} stroke={s.stroke} strokeWidth={s.width} opacity={s.opacity ?? 0.8} filter={s.filter ? "url(#rvGlassBlur)" : undefined} />
-            ))}
-          </svg>
-          <svg className="rvintro-glass-svg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
-            {[
-              { d: "M-100,480 C260,240 520,660 830,440 C1160,220 1360,520 1700,400", fill: "none", stroke: "url(#rvGlassA)", width: 22 },
-              { d: "M-100,420 C280,200 540,600 860,400 C1180,190 1380,470 1700,360", fill: "none", stroke: "url(#rvGlassB)", width: 14 },
-              { d: "M-100,370 C300,170 560,540 890,360 C1200,170 1400,420 1700,320", fill: "none", stroke: "url(#rvGlassC)", width: 8 },
-              { d: "M-100,330 C320,150 580,480 920,320 C1220,150 1420,370 1700,280", fill: "none", stroke: "url(#rvGlassA)", width: 3 },
-            ].map((s, i) => (
-              <path key={i} d={s.d} fill={s.fill} stroke={s.stroke} strokeWidth={s.width} opacity={s.opacity ?? 0.8} filter={s.filter ? "url(#rvGlassBlur)" : undefined} />
-            ))}
-          </svg>
-        </div>
+      <div className="rvintro-hero-ribbon">
+        <svg className="rvintro-ribbon-svg" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="rvRibbonCore" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor="#0A1E42" stopOpacity="0"/>
+              <stop offset="18%" stopColor="#1E4FD8" stopOpacity="0.85"/>
+              <stop offset="45%" stopColor="#ffffff" stopOpacity="0.95"/>
+              <stop offset="62%" stopColor="#6FA8FF" stopOpacity="0.95"/>
+              <stop offset="85%" stopColor="#2F6FED" stopOpacity="0.8"/>
+              <stop offset="100%" stopColor="#0A1E42" stopOpacity="0"/>
+            </linearGradient>
+            <linearGradient id="rvRibbonEdge" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor="#0A1E42" stopOpacity="0"/>
+              <stop offset="30%" stopColor="#AEC1E8" stopOpacity="0.55"/>
+              <stop offset="55%" stopColor="#3D7DFF" stopOpacity="0.65"/>
+              <stop offset="100%" stopColor="#0A1E42" stopOpacity="0"/>
+            </linearGradient>
+            <linearGradient id="rvRibbonShine" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="#ffffff" stopOpacity="0"/>
+              <stop offset="48%" stopColor="#ffffff" stopOpacity="0.9"/>
+              <stop offset="100%" stopColor="#ffffff" stopOpacity="0"/>
+            </linearGradient>
+            <filter id="rvRibbonGlow" x="-60%" y="-60%" width="220%" height="220%">
+              <feGaussianBlur stdDeviation="14"/>
+            </filter>
+          </defs>
+
+          {/* soft outer glow pass */}
+          <path
+            className="rvintro-ribbon-path rvintro-ribbon-glow"
+            d="M40,120 C260,60 340,300 560,280 C760,262 640,60 900,90 C980,100 990,180 940,220 C860,282 700,240 620,340 C540,440 700,520 860,470"
+            fill="none" stroke="url(#rvRibbonCore)" strokeWidth="46" strokeLinecap="round" opacity="0.5" filter="url(#rvRibbonGlow)"
+          />
+          {/* thick body */}
+          <path
+            className="rvintro-ribbon-path rvintro-ribbon-body"
+            d="M40,120 C260,60 340,300 560,280 C760,262 640,60 900,90 C980,100 990,180 940,220 C860,282 700,240 620,340 C540,440 700,520 860,470"
+            fill="none" stroke="url(#rvRibbonEdge)" strokeWidth="20" strokeLinecap="round"
+          />
+          {/* bright core */}
+          <path
+            className="rvintro-ribbon-path rvintro-ribbon-core"
+            d="M40,120 C260,60 340,300 560,280 C760,262 640,60 900,90 C980,100 990,180 940,220 C860,282 700,240 620,340 C540,440 700,520 860,470"
+            fill="none" stroke="url(#rvRibbonCore)" strokeWidth="9" strokeLinecap="round"
+          />
+          {/* traveling specular highlight */}
+          <path
+            className="rvintro-ribbon-path rvintro-ribbon-shine"
+            d="M40,120 C260,60 340,300 560,280 C760,262 640,60 900,90 C980,100 990,180 940,220 C860,282 700,240 620,340 C540,440 700,520 860,470"
+            fill="none" stroke="url(#rvRibbonShine)" strokeWidth="4" strokeLinecap="round"
+          />
+        </svg>
       </div>
       <div className="rvintro-orb rvintro-orb1" />
       <div className="rvintro-orb rvintro-orb2" />
@@ -253,7 +258,7 @@ const CSS = `
   .rvintro-page *{ animation-duration:0.001ms !important; animation-iteration-count:1 !important; transition-duration:0.001ms !important; }
 }
 .rvintro-bg{
-  position:fixed; inset:0; z-index:0;
+  position:absolute; inset:0; z-index:0;
   background:linear-gradient(160deg, var(--navy-950), var(--navy-800) 55%, var(--royal) 130%);
   background-size:220% 220%;
   animation:rvintroBgshift 18s ease-in-out infinite;
@@ -261,25 +266,42 @@ const CSS = `
 @keyframes rvintroBgshift{
   0%{background-position:0% 20%;} 50%{background-position:100% 80%;} 100%{background-position:0% 20%;}
 }
-.rvintro-glass-waves{
-  position:fixed; inset:0; z-index:1; pointer-events:none; overflow:hidden;
-  mix-blend-mode:screen; opacity:1;
-  -webkit-mask-image:linear-gradient(90deg, rgba(0,0,0,0.22) 0%, rgba(0,0,0,0.4) 38%, rgba(0,0,0,0.85) 62%, rgba(0,0,0,1) 100%);
-  mask-image:linear-gradient(90deg, rgba(0,0,0,0.22) 0%, rgba(0,0,0,0.4) 38%, rgba(0,0,0,0.85) 62%, rgba(0,0,0,1) 100%);
+.rvintro-hero-ribbon{
+  position:absolute; inset:0; z-index:1; pointer-events:none; overflow:hidden;
+  display:flex; align-items:center; justify-content:center;
+  animation:rvintroRibbonSway 12s ease-in-out infinite;
+  -webkit-mask-image:radial-gradient(ellipse 65% 55% at 62% 45%, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.45) 60%, rgba(0,0,0,0.12) 85%);
+  mask-image:radial-gradient(ellipse 65% 55% at 62% 45%, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.45) 60%, rgba(0,0,0,0.12) 85%);
 }
-.rvintro-glass-track{
-  position:absolute; top:0; left:0; height:100%; width:200%;
-  display:flex; animation:rvintroGlassDrift 34s linear infinite;
+@keyframes rvintroRibbonSway{
+  0%,100%{ transform:translate(0,0) scale(1); }
+  50%{ transform:translate(-1.5%,1%) scale(1.015); }
 }
-.rvintro-glass-svg{ width:50%; height:100%; flex-shrink:0; display:block; }
-@keyframes rvintroGlassDrift{ from{ transform:translateX(0); } to{ transform:translateX(-50%); } }
+.rvintro-ribbon-svg{ width:min(1100px,92vw); height:auto; opacity:0.9; }
+.rvintro-ribbon-path{ stroke-dasharray:2600; }
+.rvintro-ribbon-glow{ animation:rvintroRibbonFlow 9s ease-in-out infinite; }
+.rvintro-ribbon-body{ animation:rvintroRibbonFlow 9s ease-in-out infinite; }
+.rvintro-ribbon-core{ animation:rvintroRibbonFlow 9s ease-in-out infinite; }
+.rvintro-ribbon-shine{
+  stroke-dasharray:120 2600;
+  animation:rvintroRibbonShine 4.5s linear infinite;
+}
+@keyframes rvintroRibbonFlow{
+  0%{ stroke-dashoffset:0; }
+  50%{ stroke-dashoffset:-60; }
+  100%{ stroke-dashoffset:0; }
+}
+@keyframes rvintroRibbonShine{
+  0%{ stroke-dashoffset:2720; }
+  100%{ stroke-dashoffset:0; }
+}
 
-.rvintro-particles{ position:fixed; inset:0; z-index:0; pointer-events:none; overflow:hidden; }
+.rvintro-particles{ position:absolute; inset:0; z-index:0; pointer-events:none; overflow:hidden; }
 
-.rvintro-words-dim{ position:fixed; inset:0; z-index:1; pointer-events:none; overflow:hidden; }
+.rvintro-words-dim{ position:absolute; inset:0; z-index:1; pointer-events:none; overflow:hidden; }
 .rvintro-hword{ position:absolute; font-weight:800; letter-spacing:0.02em; color:rgba(255,255,255,0.045); white-space:nowrap; user-select:none; }
 .rvintro-words-bright{
-  position:fixed; inset:0; z-index:1; pointer-events:none; overflow:hidden;
+  position:absolute; inset:0; z-index:1; pointer-events:none; overflow:hidden;
   -webkit-mask-image:radial-gradient(circle 170px at var(--mx,50%) var(--my,50%), black 0%, transparent 100%);
   mask-image:radial-gradient(circle 170px at var(--mx,50%) var(--my,50%), black 0%, transparent 100%);
 }
@@ -295,7 +317,7 @@ const CSS = `
   100%{ transform:translateY(-115vh) translateX(var(--dx,20px)); opacity:0; }
 }
 
-.rvintro-orb{position:fixed; z-index:0; border-radius:50%; filter:blur(50px); pointer-events:none;}
+.rvintro-orb{position:absolute; z-index:0; border-radius:50%; filter:blur(50px); pointer-events:none;}
 .rvintro-orb1{width:480px;height:480px; top:-200px; left:-150px; background:radial-gradient(circle, var(--sky), transparent 70%); opacity:0.3; animation:rvintroFloat1 15s ease-in-out infinite;}
 .rvintro-orb2{width:420px;height:420px; bottom:-200px; right:-150px; background:radial-gradient(circle, var(--azure), transparent 70%); opacity:0.2; animation:rvintroFloat2 18s ease-in-out infinite;}
 .rvintro-orb3{width:240px;height:240px; top:15%; right:12%; background:radial-gradient(circle, var(--sky), transparent 70%); opacity:0.18; animation:rvintroFloat3 11s ease-in-out infinite;}
