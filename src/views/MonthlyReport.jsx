@@ -1,12 +1,19 @@
 import React, { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Coffee, Repeat, Home } from "lucide-react";
+import { ChevronLeft, ChevronRight, Coffee, Repeat, Home, Pencil, X, CalendarHeart } from "lucide-react";
 import { COLORS } from "../lib/constants";
 import { computeStatus, fmtTime, fmtHrs, monthKey, daysInMonth, todayStr } from "../lib/utils";
 import { StatusPill, StatCard, selectStyle, th, td } from "../components/ui";
 
-export default function MonthlyReportView({ employees, attendance, now }) {
+export default function MonthlyReportView({ employees, attendance, now, onSaveEdit, session, publicHolidays = [] }) {
   const [empId, setEmpId] = useState(employees[0]?.id || "");
   const [ym, setYm] = useState(monthKey(todayStr(now)));
+  const [editingDate, setEditingDate] = useState(null); // date string of the row currently open in the edit modal
+
+  const holidayByDate = useMemo(() => {
+    const map = {};
+    publicHolidays.forEach(h => { map[h.date] = h.name; });
+    return map;
+  }, [publicHolidays]);
 
   const emp = employees.find(e => e.id === empId) || employees[0];
   const shiftMonth = (delta) => {
@@ -86,7 +93,7 @@ export default function MonthlyReportView({ employees, attendance, now }) {
           <thead>
             <tr style={{ color: COLORS.muted, fontSize: 12.5, textAlign: "left" }}>
               <th style={th}>Date</th><th style={th}>Status</th><th style={th}>Check-in</th>
-              <th style={th}>Check-out</th><th style={th}>WFH in</th><th style={th}>WFH out</th><th style={th}>Hours</th><th style={th}>Notes</th>
+              <th style={th}>Check-out</th><th style={th}>WFH in</th><th style={th}>WFH out</th><th style={th}>Hours</th><th style={th}>Notes</th><th style={th}></th>
             </tr>
           </thead>
           <tbody>
@@ -110,6 +117,11 @@ export default function MonthlyReportView({ employees, attendance, now }) {
                   </td>
                   <td style={{ ...td, color: COLORS.muted }}>{hours != null ? fmtHrs(hours) : "—"}</td>
                   <td style={td}>
+                    {holidayByDate[r.date] && (
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "#B2650A", fontWeight: 700, fontSize: 12 }}>
+                        <CalendarHeart size={11} /> {holidayByDate[r.date]}
+                      </span>
+                    )}
                     {r.rec?.alternateDay && (
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: COLORS.violet, fontWeight: 700, fontSize: 12 }}>
                         <Repeat size={11} /> Alt. day
@@ -120,19 +132,201 @@ export default function MonthlyReportView({ employees, attendance, now }) {
                         <Home size={11} /> WFH
                       </span>
                     )}
+                    {r.rec?.notes && (
+                      <div style={{ fontSize: 12, color: COLORS.muted, marginTop: 2 }}>{r.rec.notes}</div>
+                    )}
+                    {r.rec?.manuallyEdited && (
+                      <span style={{
+                        display: "inline-flex", alignItems: "center", gap: 4, marginTop: 4,
+                        background: "#FFF3D6", color: "#8A6200", fontWeight: 700, fontSize: 11,
+                        padding: "2px 7px", borderRadius: 999,
+                      }} title={r.rec.editedBy ? `Edited by ${r.rec.editedBy}` : "Manually edited"}>
+                        Edited
+                      </span>
+                    )}
+                  </td>
+                  <td style={{ ...td, textAlign: "right" }}>
+                    <button
+                      onClick={() => setEditingDate(r.date)}
+                      title="Correct this day's attendance"
+                      style={{
+                        background: "none", border: `1px solid ${COLORS.line}`, borderRadius: 8,
+                        cursor: "pointer", color: COLORS.muted, padding: "5px 7px",
+                        display: "inline-flex", alignItems: "center",
+                      }}
+                    >
+                      <Pencil size={13} />
+                    </button>
                   </td>
                 </tr>
               );
             })}
             {rows.length === 0 && (
-              <tr><td colSpan={8} style={{ ...td, color: COLORS.muted, textAlign: "center", padding: "26px 0" }}>No records this month yet.</td></tr>
+              <tr><td colSpan={9} style={{ ...td, color: COLORS.muted, textAlign: "center", padding: "26px 0" }}>No records this month yet.</td></tr>
             )}
           </tbody>
         </table>
       </div>
+
+      {editingDate && (
+        <EditAttendanceModal
+          date={editingDate}
+          empName={emp.name}
+          rec={attendance[`${emp.id}|${editingDate}`]}
+          onClose={() => setEditingDate(null)}
+          onSave={async (patch) => {
+            await onSaveEdit(emp.id, editingDate, patch);
+            setEditingDate(null);
+          }}
+        />
+      )}
     </div>
   );
 }
+
+// Pre-fills from an ISO timestamp into the local "YYYY-MM-DDTHH:mm" format
+// <input type="datetime-local"> expects. Empty string renders as blank.
+function toDatetimeLocal(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+// Inverse — datetime-local string back to an ISO timestamp for the API.
+// Blank input means "clear this field".
+function fromDatetimeLocal(str) {
+  if (!str) return null;
+  const d = new Date(str);
+  return isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+function EditAttendanceModal({ date, empName, rec, onClose, onSave }) {
+  const [checkIn, setCheckIn] = useState(toDatetimeLocal(rec?.checkIn));
+  const [checkOut, setCheckOut] = useState(toDatetimeLocal(rec?.checkOut));
+  const [showSecond, setShowSecond] = useState(!!(rec?.secondCheckIn || rec?.secondCheckOut));
+  const [secondCheckIn, setSecondCheckIn] = useState(toDatetimeLocal(rec?.secondCheckIn));
+  const [secondCheckOut, setSecondCheckOut] = useState(toDatetimeLocal(rec?.secondCheckOut));
+  const [notes, setNotes] = useState(rec?.notes || "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+
+  const dateLabel = new Date(date + "T00:00:00").toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
+
+  const handleSubmit = async () => {
+    setError(null);
+    const inVal = fromDatetimeLocal(checkIn);
+    const outVal = fromDatetimeLocal(checkOut);
+    if (inVal && outVal && new Date(outVal).getTime() <= new Date(inVal).getTime()) {
+      setError("Check-out must be after check-in.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const patch = { check_in: inVal, check_out: outVal, notes };
+      if (showSecond) {
+        patch.second_check_in = fromDatetimeLocal(secondCheckIn);
+        patch.second_check_out = fromDatetimeLocal(secondCheckOut);
+      }
+      await onSave(patch);
+    } catch (e) {
+      setError(e.message || "Couldn't save that correction.");
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, background: "rgba(20,20,30,0.35)",
+        display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="rv-card"
+        style={{ width: "100%", maxWidth: 440, padding: "22px 24px", maxHeight: "90vh", overflowY: "auto" }}
+      >
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 4 }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>Correct attendance</h3>
+            <p style={{ margin: "3px 0 0", fontSize: 13, color: COLORS.muted }}>{empName} — {dateLabel}</p>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: COLORS.muted, padding: 4 }}>
+            <X size={18} />
+          </button>
+        </div>
+
+        <div style={{ display: "grid", gap: 14, marginTop: 18 }}>
+          <Field label="Check-in">
+            <input type="datetime-local" value={checkIn} onChange={e => setCheckIn(e.target.value)} style={inputStyle} />
+          </Field>
+          <Field label="Check-out">
+            <input type="datetime-local" value={checkOut} onChange={e => setCheckOut(e.target.value)} style={inputStyle} />
+          </Field>
+
+          {!showSecond ? (
+            <button onClick={() => setShowSecond(true)} style={linkBtn}>+ Add second (night) session</button>
+          ) : (
+            <>
+              <Field label="Second check-in">
+                <input type="datetime-local" value={secondCheckIn} onChange={e => setSecondCheckIn(e.target.value)} style={inputStyle} />
+              </Field>
+              <Field label="Second check-out">
+                <input type="datetime-local" value={secondCheckOut} onChange={e => setSecondCheckOut(e.target.value)} style={inputStyle} />
+              </Field>
+            </>
+          )}
+
+          <Field label="Notes">
+            <textarea
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              placeholder="e.g. Forgot to check out, corrected by HR"
+              rows={3}
+              style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }}
+            />
+          </Field>
+
+          {error && <p style={{ margin: 0, color: COLORS.red, fontSize: 13, fontWeight: 600 }}>{error}</p>}
+
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 4 }}>
+            <button onClick={onClose} disabled={saving} style={secondaryBtn}>Cancel</button>
+            <button onClick={handleSubmit} disabled={saving} style={primaryBtn}>
+              {saving ? "Saving…" : "Save correction"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, children }) {
+  return (
+    <label style={{ display: "grid", gap: 5 }}>
+      <span style={{ fontSize: 12.5, fontWeight: 700, color: COLORS.muted }}>{label}</span>
+      {children}
+    </label>
+  );
+}
+
+const inputStyle = {
+  border: `1px solid ${COLORS.line}`, borderRadius: 8, padding: "8px 10px",
+  fontSize: 13.5, width: "100%", boxSizing: "border-box",
+};
+const linkBtn = {
+  background: "none", border: "none", cursor: "pointer", color: COLORS.blue,
+  fontSize: 13, fontWeight: 700, padding: 0, textAlign: "left",
+};
+const secondaryBtn = {
+  background: "#fff", border: `1px solid ${COLORS.line}`, borderRadius: 8,
+  padding: "9px 16px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", color: COLORS.ink,
+};
+const primaryBtn = {
+  background: COLORS.ink, color: "#fff", border: "none", borderRadius: 8,
+  padding: "9px 16px", fontSize: 13.5, fontWeight: 700, cursor: "pointer",
+};
 
 const navBtn = {
   background: "none", border: "none", cursor: "pointer", color: COLORS.muted,

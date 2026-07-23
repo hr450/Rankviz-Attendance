@@ -7,6 +7,7 @@ import {
   loadLeaveTypes, createLeaveType, deleteLeaveType,
   loadLeaveRequests, createLeaveRequest, decideLeaveRequest,
   loadLeaveBalances, saveLeaveBalance,
+  loadPublicHolidays, createPublicHoliday, deletePublicHoliday,
 } from "./lib/db";
 import { notifyHR } from "./lib/email";
 
@@ -24,6 +25,7 @@ import EmployeeDashboard from "./views/EmployeeDashboard";
 import LeaveApprovalsView from "./views/LeaveApprovals";
 import LeaveSummaryView from "./views/LeaveSummary";
 import LeaveBalancesView from "./views/LeaveBalances";
+import PublicHolidaysView from "./views/PublicHolidays";
 
 export default function App() {
   const [stage, setStage] = useState("intro"); // intro -> boot -> login -> entering -> app
@@ -42,6 +44,7 @@ export default function App() {
   const [leaveTypes, setLeaveTypes] = useState([]);
   const [leaveRequests, setLeaveRequests] = useState([]);
   const [leaveBalances, setLeaveBalances] = useState({});
+  const [publicHolidays, setPublicHolidays] = useState([]);
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
@@ -60,12 +63,14 @@ export default function App() {
         const types = await loadLeaveTypes();
         const requests = await loadLeaveRequests();
         const balances = await loadLeaveBalances();
+        const holidays = await loadPublicHolidays();
         setEmployees(emps);
         setAttendance(att);
         setAccountsByEmp(byEmp);
         setLeaveTypes(types);
         setLeaveRequests(requests);
         setLeaveBalances(balances);
+        setPublicHolidays(holidays);
       } catch (e) {
         setLoadError(e.message);
       }
@@ -130,6 +135,62 @@ export default function App() {
   const updateLeaveBalance = useCallback(async (employeeId, balance) => {
     setLeaveBalances(prev => ({ ...prev, [employeeId]: balance }));
     await saveLeaveBalance(employeeId, balance);
+  }, []);
+
+  /* Manual HR/admin correction — used by MonthlyReport's per-row Edit
+     modal. Hits the existing /api/attendance/edit endpoint (sets
+     manually_edited/edited_by/edited_at server-side); this just wires a
+     UI to it and folds the corrected fields back into local state.
+     Fields not present in `patch` are left untouched. */
+  const saveManualEdit = useCallback(async (employeeId, date, patch) => {
+    setSaveState("saving");
+    const res = await fetch("/api/attendance/edit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        employee_id: employeeId,
+        date,
+        edited_by: session?.name || session?.username || "HR",
+        ...patch,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setSaveState("error");
+      throw new Error(data.error || "Couldn't save that correction.");
+    }
+    const row = data.record || {};
+    const key = recKey(employeeId, date);
+    setAttendance(prev => ({
+      ...prev,
+      [key]: {
+        ...prev[key],
+        ...("check_in" in row ? { checkIn: row.check_in } : {}),
+        ...("check_out" in row ? { checkOut: row.check_out } : {}),
+        ...("second_check_in" in row ? { secondCheckIn: row.second_check_in } : {}),
+        ...("second_check_out" in row ? { secondCheckOut: row.second_check_out } : {}),
+        ...("notes" in row ? { notes: row.notes || "" } : {}),
+        manuallyEdited: true,
+        editedBy: row.edited_by || session?.name || session?.username || "HR",
+        editedAt: row.edited_at || new Date().toISOString(),
+      },
+    }));
+    setSaveState("saved");
+    return row;
+  }, [session]);
+
+  const addHoliday = useCallback(async (date, name) => {
+    const row = await createPublicHoliday(date, name);
+    setPublicHolidays(prev => {
+      const next = prev.filter(h => h.date !== date); // on_conflict=date means old entry is replaced
+      next.push(row);
+      next.sort((a, b) => a.date.localeCompare(b.date));
+      return next;
+    });
+  }, []);
+  const removeHoliday = useCallback(async (id) => {
+    await deletePublicHoliday(id);
+    setPublicHolidays(prev => prev.filter(h => h.id !== id));
   }, []);
 
   const persistEmployees = useCallback(async (next) => {
@@ -232,7 +293,23 @@ export default function App() {
           <EmployeesView employees={employees} setEmployees={persistEmployees} accounts={accountsByEmp} refreshAccounts={refreshAccounts} />
         )}
         {tab === "reports" && <ReportsView employees={employees} attendance={attendance} now={now} />}
-        {tab === "monthly" && <MonthlyReportView employees={employees} attendance={attendance} now={now} />}
+        {tab === "monthly" && (
+          <MonthlyReportView
+            employees={employees}
+            attendance={attendance}
+            now={now}
+            onSaveEdit={saveManualEdit}
+            session={session}
+            publicHolidays={publicHolidays}
+          />
+        )}
+        {tab === "holidays" && (
+          <PublicHolidaysView
+            holidays={publicHolidays}
+            onAdd={addHoliday}
+            onRemove={removeHoliday}
+          />
+        )}
         {tab === "leaveApprovals" && (
           <LeaveApprovalsView
             employees={employees}

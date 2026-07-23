@@ -93,6 +93,8 @@ export async function loadAttendance() {
       // then come back for a few extra hours at night.
       secondCheckIn: r.second_check_in, secondCheckOut: r.second_check_out,
       alternateDay: !!r.alternate_day, leaveReason: r.leave_reason || "",
+      notes: r.notes || "", manuallyEdited: !!r.manually_edited,
+      editedBy: r.edited_by || null, editedAt: r.edited_at || null,
     };
   });
   return map;
@@ -279,6 +281,28 @@ export async function saveLeaveLogEntry(employeeId, date, leaveType) {
     headers: { Prefer: "resolution=merge-duplicates" },
     body: JSON.stringify([{ employee_id: employeeId, date, leave_type: leaveType }]),
   });
+}
+
+/* ---------------- Public holidays (manually maintained by HR/admin) ---------------- */
+// Point 2: when a date on this list falls in a report/log, the holiday
+// name is shown alongside that day's Notes — automatically, without
+// touching the attendance row's actual `notes` field, so it never
+// silently overwrites something HR typed in by hand.
+export async function loadPublicHolidays() {
+  const rows = await supaFetch("public_holidays?select=*&order=date.asc");
+  return (rows || []).map(r => ({ id: r.id, date: r.date, name: r.name }));
+}
+export async function createPublicHoliday(date, name) {
+  const row = { id: uid("hol"), date, name: name.trim() };
+  await supaFetch("public_holidays?on_conflict=date", {
+    method: "POST",
+    headers: { Prefer: "resolution=merge-duplicates" },
+    body: JSON.stringify([row]),
+  });
+  return row;
+}
+export async function deletePublicHoliday(id) {
+  await supaFetch(`public_holidays?id=eq.${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
 // No seed/demo employees — the Employees list starts empty. Add real staff
