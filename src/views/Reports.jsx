@@ -21,7 +21,7 @@ export default function ReportsView({ employees, attendance, now }) {
   const todayFull = todayStr(now);
 
   const summary = employees.map(emp => {
-    let present = 0, late = 0, half = 0, wfh = 0, leave = 0, absent = 0, totalHours = 0, workedDays = 0, alternateDays = 0;
+    let present = 0, late = 0, half = 0, noCheckout = 0, wfh = 0, leave = 0, absent = 0, totalHours = 0, workedDays = 0, alternateDays = 0;
     for (let day = 1; day <= totalDays; day++) {
       const dateStr = `${ym}-${String(day).padStart(2, "0")}`;
       if (dateStr > todayFull) continue;
@@ -31,6 +31,7 @@ export default function ReportsView({ employees, attendance, now }) {
       if (status.tone === "present") present++;
       else if (status.tone === "late") { present++; late++; }
       else if (status.tone === "half") { half++; }
+      else if (status.tone === "no_checkout") { noCheckout++; }
       else if (status.tone === "wfh") { wfh++; }
       else if (status.tone === "leave") { leave++; }
       else if (status.tone === "absent") { absent++; }
@@ -38,9 +39,9 @@ export default function ReportsView({ employees, attendance, now }) {
       const inT = rec?.checkIn || rec?.wfhCheckIn, outT = rec?.checkOut || rec?.wfhCheckOut;
       if (inT && outT) { totalHours += (new Date(outT) - new Date(inT)) / 3600000; workedDays++; }
     }
-    const markedDays = present + half + wfh + absent;
+    const markedDays = present + half + noCheckout + wfh + absent;
     const attendancePct = markedDays ? Math.round(((present + half + wfh) / markedDays) * 100) : null;
-    return { emp, present, late, half, wfh, leave, absent, alternateDays, avgHours: workedDays ? totalHours / workedDays : 0, attendancePct };
+    return { emp, present, late, half, noCheckout, wfh, leave, absent, alternateDays, avgHours: workedDays ? totalHours / workedDays : 0, attendancePct };
   });
 
   const teamTotals = summary.reduce((acc, s) => {
@@ -61,14 +62,14 @@ export default function ReportsView({ employees, attendance, now }) {
 
   const chartData = summary.map(s => ({
     name: s.emp.name.split(" ")[0],
-    Present: s.present, Late: s.late, "Half Day": s.half, WFH: s.wfh, Leave: s.leave, Absent: s.absent,
+    Present: s.present, Late: s.late, "Half Day": s.half, "No Checkout": s.noCheckout, WFH: s.wfh, Leave: s.leave, Absent: s.absent,
   }));
-  const hasChartData = chartData.some(d => d.Present + d.Late + d["Half Day"] + d.WFH + d.Leave + d.Absent > 0);
+  const hasChartData = chartData.some(d => d.Present + d.Late + d["Half Day"] + d["No Checkout"] + d.WFH + d.Leave + d.Absent > 0);
 
   const exportCsv = () => {
-    const header = ["Name", "Present", "Late", "Half day", "WFH", "Leave", "Absent", "Attendance %", "Avg hrs/day", "Alternate days"];
+    const header = ["Name", "Present", "Late", "Half day", "No checkout", "WFH", "Leave", "Absent", "Attendance %", "Avg hrs/day", "Alternate days"];
     const rows = summary.map(s => [
-      s.emp.name, s.present, s.late, s.half, s.wfh, s.leave, s.absent,
+      s.emp.name, s.present, s.late, s.half, s.noCheckout, s.wfh, s.leave, s.absent,
       s.attendancePct ?? "", fmtHrs(s.avgHours), s.alternateDays,
     ]);
     const csv = [header, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
@@ -137,7 +138,7 @@ export default function ReportsView({ employees, attendance, now }) {
           <thead>
             <tr style={{ color: COLORS.muted, fontSize: 12.5, textAlign: "left" }}>
               <th style={th}>Name</th><th style={th}>Present</th><th style={th}>Late</th>
-              <th style={th}>Half day</th><th style={th}>WFH</th><th style={th}>Leave</th><th style={th}>Absent</th>
+              <th style={th}>Half day</th><th style={th}>No checkout</th><th style={th}>WFH</th><th style={th}>Leave</th><th style={th}>Absent</th>
               <th style={th}>Attendance</th>
               <th style={th}>Avg hrs/day</th>
               <th style={th}>
@@ -159,6 +160,7 @@ export default function ReportsView({ employees, attendance, now }) {
                 <td style={td}>{s.present}</td>
                 <td style={td}>{s.late}</td>
                 <td style={td}>{s.half}</td>
+                <td style={td}>{s.noCheckout}</td>
                 <td style={td}>{s.wfh}</td>
                 <td style={td}>{s.leave}</td>
                 <td style={td}>{s.absent}</td>
@@ -189,7 +191,7 @@ export default function ReportsView({ employees, attendance, now }) {
               </tr>
             ))}
             {visibleSummary.length === 0 && (
-              <tr><td colSpan={10} style={{ ...td, color: COLORS.muted, textAlign: "center", padding: "26px 0" }}>
+              <tr><td colSpan={11} style={{ ...td, color: COLORS.muted, textAlign: "center", padding: "26px 0" }}>
                 {employees.length === 0 ? "No employees yet." : "No employees match your search."}
               </td></tr>
             )}
@@ -199,6 +201,7 @@ export default function ReportsView({ employees, attendance, now }) {
 
       <p style={{ color: COLORS.muted, fontSize: 12.5, marginTop: 14 }}>
         Late = check-in more than {GRACE_MIN} min after shift start. Half day = fewer than {HALFDAY_HOURS} hours worked.
+        No checkout = checked in but never checked out for a past day (not counted as Half Day).
         Alternate day = a day an employee worked to make up for a leave.
       </p>
     </div>
@@ -211,6 +214,7 @@ const SERIES = [
   { key: "Present", color: "#2F9E6E" },
   { key: "Late", color: "#D99A2B" },
   { key: "Half Day", color: "#E8B94A" },
+  { key: "No Checkout", color: "#D97A3F" },
   { key: "WFH", color: "#2F6FED" },
   { key: "Leave", color: "#3E5A9E" },
   { key: "Absent", color: "#D9534F" },

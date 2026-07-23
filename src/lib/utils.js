@@ -68,7 +68,7 @@ export function computeStatus(emp, rec, isPastDay, nowMinutes, dateStr) {
 
   if (!rec.checkOut) {
     if (!isPastDay) return { label: isLate ? "Late" : "Present", tone: isLate ? "late" : "present" };
-    return { label: "No checkout", tone: "half" };
+    return { label: "No checkout", tone: "no_checkout" };
   }
   if (hours != null && hours < HALFDAY_HOURS) {
     return { label: `Half Day${isLate ? " · Late" : ""}`, tone: "half" };
@@ -82,6 +82,7 @@ export const TONE_STYLES = {
   wfh: { bg: "#E9EEFC", fg: "#0EA5E9", dot: "#0EA5E9" },
   late: { bg: "#FBF0DC", fg: "#D99A2B", dot: "#D99A2B" },
   half: { bg: "#FBF0DC", fg: "#D99A2B", dot: "#D99A2B" },
+  no_checkout: { bg: "#FDEDE3", fg: "#D97A3F", dot: "#D97A3F" },
   absent: { bg: "#FBE8E7", fg: "#D9534F", dot: "#D9534F" },
   leave: { bg: "#E9EEFC", fg: "#3E5A9E", dot: "#3E5A9E" },
   pending: { bg: "#EEF0F9", fg: "#5E6B85", dot: "#B7BBD6" },

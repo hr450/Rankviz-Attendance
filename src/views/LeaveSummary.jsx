@@ -31,8 +31,9 @@ export default function LeaveSummaryView({ employees, attendance, leaveRequests,
         byType[bucket].push(r);
       });
 
-      // Half day + WFH are computed straight from attendance, not from requests.
+      // Half day + No checkout + WFH are computed straight from attendance, not from requests.
       const halfDays = [];
+      const noCheckoutDays = [];
       const wfhDays = [];
       Object.entries(attendance || {}).forEach(([key, rec]) => {
         if (!key.startsWith(`${emp.id}|`)) return;
@@ -40,12 +41,14 @@ export default function LeaveSummaryView({ employees, attendance, leaveRequests,
         if (date > today) return;
         const status = computeStatus(emp, rec, date < today, nowMinutes, date);
         if (status?.tone === "half") halfDays.push({ date });
+        if (status?.tone === "no_checkout") noCheckoutDays.push({ date });
         if (status?.tone === "wfh") wfhDays.push({ date });
       });
       halfDays.sort((a, b) => (a.date < b.date ? 1 : -1));
+      noCheckoutDays.sort((a, b) => (a.date < b.date ? 1 : -1));
       wfhDays.sort((a, b) => (a.date < b.date ? 1 : -1));
 
-      return { emp, byType, halfDays, wfhDays };
+      return { emp, byType, halfDays, noCheckoutDays, wfhDays };
     });
   }, [employees, approved, attendance, today, nowMinutes]);
 
@@ -54,6 +57,7 @@ export default function LeaveSummaryView({ employees, attendance, leaveRequests,
     return acc;
   }, {});
   const totalHalf = summaries.reduce((s, row) => s + row.halfDays.length, 0);
+  const totalNoCheckout = summaries.reduce((s, row) => s + row.noCheckoutDays.length, 0);
   const totalWfh = summaries.reduce((s, row) => s + row.wfhDays.length, 0);
 
   return (
@@ -65,6 +69,7 @@ export default function LeaveSummaryView({ employees, attendance, leaveRequests,
           <StatCard key={t} label={t} value={totals[t]} tone="leave" />
         ))}
         <StatCard label="Half Day" value={totalHalf} tone="half" />
+        <StatCard label="No Checkout" value={totalNoCheckout} tone="no_checkout" />
         <StatCard label="Work From Home" value={totalWfh} tone="wfh" />
       </div>
 
@@ -75,6 +80,7 @@ export default function LeaveSummaryView({ employees, attendance, leaveRequests,
               <th style={th}>Employee</th>
               {LEAVE_TYPE_LABELS.map(t => <th key={t} style={th}>{t}</th>)}
               <th style={th}>Half Day</th>
+              <th style={th}>No Checkout</th>
               <th style={th}>WFH</th>
               <th style={th}>Total</th>
               <th style={th}></th>
@@ -82,7 +88,7 @@ export default function LeaveSummaryView({ employees, attendance, leaveRequests,
           </thead>
           <tbody>
             {summaries.map((row, i) => {
-              const total = LEAVE_TYPE_LABELS.reduce((s, t) => s + row.byType[t].length, 0) + row.halfDays.length + row.wfhDays.length;
+              const total = LEAVE_TYPE_LABELS.reduce((s, t) => s + row.byType[t].length, 0) + row.halfDays.length + row.noCheckoutDays.length + row.wfhDays.length;
               const isOpen = expanded === row.emp.id;
               return (
                 <React.Fragment key={row.emp.id}>
@@ -94,13 +100,14 @@ export default function LeaveSummaryView({ employees, attendance, leaveRequests,
                     <td style={td}><strong>{row.emp.name}</strong></td>
                     {LEAVE_TYPE_LABELS.map(t => <td key={t} style={td}>{row.byType[t].length || "—"}</td>)}
                     <td style={td}>{row.halfDays.length || "—"}</td>
+                    <td style={td}>{row.noCheckoutDays.length || "—"}</td>
                     <td style={td}>{row.wfhDays.length || "—"}</td>
                     <td style={{ ...td, fontWeight: 700 }}>{total}</td>
                     <td style={td}>{isOpen ? <ChevronUp size={15} color={COLORS.muted} /> : <ChevronDown size={15} color={COLORS.muted} />}</td>
                   </tr>
                   {isOpen && (
                     <tr>
-                      <td colSpan={LEAVE_TYPE_LABELS.length + 4} style={{ padding: 0, background: COLORS.bg }}>
+                      <td colSpan={LEAVE_TYPE_LABELS.length + 5} style={{ padding: 0, background: COLORS.bg }}>
                         <LeaveDetail row={row} />
                       </td>
                     </tr>
@@ -109,15 +116,16 @@ export default function LeaveSummaryView({ employees, attendance, leaveRequests,
               );
             })}
             {summaries.length === 0 && (
-              <tr><td colSpan={LEAVE_TYPE_LABELS.length + 4} style={{ ...td, color: COLORS.muted, textAlign: "center", padding: "26px 0" }}>No employees yet.</td></tr>
+              <tr><td colSpan={LEAVE_TYPE_LABELS.length + 5} style={{ ...td, color: COLORS.muted, textAlign: "center", padding: "26px 0" }}>No employees yet.</td></tr>
             )}
           </tbody>
         </table>
       </div>
 
       <p style={{ color: COLORS.muted, fontSize: 12.5, marginTop: 14 }}>
-        Sick / Casual / Annual / Short Leave counts come from approved leave requests. Half Day and WFH are
-        calculated automatically from daily check-in/check-out records. Click a row to see full dates and reasons.
+        Sick / Casual / Annual / Short Leave counts come from approved leave requests. Half Day, No Checkout, and WFH are
+        calculated automatically from daily check-in/check-out records — No Checkout means an employee checked in but
+        never checked out, and is tracked separately from Half Day. Click a row to see full dates and reasons.
       </p>
     </div>
   );
@@ -133,6 +141,7 @@ function LeaveDetail({ row }) {
       })),
     })),
     { label: "Half Day", items: row.halfDays.map(h => ({ date: fmtDate(h.date) })) },
+    { label: "No Checkout", items: row.noCheckoutDays.map(h => ({ date: fmtDate(h.date) })) },
     { label: "Work From Home", items: row.wfhDays.map(h => ({ date: fmtDate(h.date) })) },
   ].filter(s => s.items.length > 0);
 
