@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Trash2, CalendarPlus } from "lucide-react";
+import { Trash2, CalendarPlus, RefreshCw } from "lucide-react";
 import { COLORS } from "../lib/constants";
 import { th, td } from "../components/ui";
 
@@ -13,6 +13,37 @@ export default function PublicHolidaysView({ holidays, onAdd, onRemove }) {
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+
+  const currentYear = new Date().getFullYear();
+  const [syncYear, setSyncYear] = useState(currentYear);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState(null);
+
+  // Pulls official Pakistan public holidays from Nager.Date (free, no key
+  // needed) and adds any date not already on the list. Never touches or
+  // overwrites an existing entry — manual or previously synced — so a
+  // custom name/date you've set stays exactly as you left it.
+  const handleSync = async () => {
+    setSyncMsg(null);
+    setSyncing(true);
+    try {
+      const res = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${syncYear}/PK`);
+      if (!res.ok) throw new Error("Couldn't reach the holiday calendar. Try again later or add manually.");
+      const data = await res.json();
+      const existingDates = new Set(holidays.map(h => h.date));
+      let added = 0, skipped = 0;
+      for (const h of data) {
+        if (existingDates.has(h.date)) { skipped++; continue; }
+        await onAdd(h.date, h.localName || h.name);
+        existingDates.add(h.date);
+        added++;
+      }
+      setSyncMsg(`Added ${added} holiday${added === 1 ? "" : "s"} for ${syncYear}${skipped ? `, skipped ${skipped} already on your list` : ""}.`);
+    } catch (e) {
+      setSyncMsg(e.message || "Sync failed — try again or add manually.");
+    }
+    setSyncing(false);
+  };
 
   const handleAdd = async () => {
     setError(null);
@@ -37,6 +68,24 @@ export default function PublicHolidaysView({ holidays, onAdd, onRemove }) {
       <p style={{ color: COLORS.muted, fontSize: 14, margin: "0 0 20px" }}>
         Dates added here automatically show as a note on that day across attendance reports — no need to enter it per employee.
       </p>
+
+      <div className="rv-card" style={{ padding: "16px 20px", marginBottom: 20 }}>
+        <h3 style={{ margin: "0 0 6px", fontSize: 15, fontWeight: 700, display: "flex", alignItems: "center", gap: 7 }}>
+          <RefreshCw size={15} color={COLORS.green} /> Auto-fetch from calendar
+        </h3>
+        <p style={{ margin: "0 0 12px", color: COLORS.muted, fontSize: 13 }}>
+          Pulls official Pakistan public holidays automatically. Only adds dates you don't already have — won't touch anything you've added or edited.
+        </p>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+          <select value={syncYear} onChange={e => setSyncYear(Number(e.target.value))} style={inputStyle}>
+            {[currentYear - 1, currentYear, currentYear + 1].map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+          <button onClick={handleSync} disabled={syncing} style={primaryBtn}>
+            <RefreshCw size={14} /> {syncing ? "Fetching…" : "Fetch Pakistan holidays"}
+          </button>
+        </div>
+        {syncMsg && <p style={{ margin: "10px 0 0", fontSize: 13, fontWeight: 600, color: COLORS.ink }}>{syncMsg}</p>}
+      </div>
 
       <div className="rv-card" style={{ padding: "16px 20px", marginBottom: 20 }}>
         <h3 style={{ margin: "0 0 12px", fontSize: 15, fontWeight: 700, display: "flex", alignItems: "center", gap: 7 }}>
