@@ -112,6 +112,28 @@ export async function saveAttendanceRecord(employeeId, date, rec, source) {
   });
 }
 
+/* ---------------- Web punch (IP-restricted office check-in/out) ----------------
+   Office actions (in / out / second_in / second_out) are verified server-side
+   against the office network's IP in api/attendance/punch.js — the browser's
+   own IP is never trusted for this. WFH / leave / alternate skip that check
+   entirely since they're not tied to being physically in the office.
+   Throws on rejection (e.g. { code: "OFFICE_IP_REQUIRED" }) so callers can
+   show the employee a clear reason instead of silently failing. */
+export async function webPunch(employeeId, action, meta) {
+  const res = await fetch("/api/attendance/punch", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ employee_id: employeeId, action, meta }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error(data.error || `Punch failed (${res.status})`);
+    err.code = data.code;
+    throw err;
+  }
+  return data.record; // camelCase attendance fields, ready to merge into state
+}
+
 /* ---------------- User accounts (admin / employee login) ---------------- */
 function rowToAccount(r) {
   return { id: r.id, username: r.username, role: r.role, employeeId: r.employee_id || null, name: r.name || "" };

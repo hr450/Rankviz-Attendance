@@ -8,9 +8,15 @@ export default function TodayView({ employees, attendance, now, punch }) {
   const date = todayStr(now);
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
   const [flashId, setFlashId] = useState(null);
+  const [errorFor, setErrorFor] = useState(null); // { empId, message }
 
-  const handlePunch = (empId, action, meta) => {
-    punch(empId, action, meta);
+  const handlePunch = async (empId, action, meta) => {
+    const result = await punch(empId, action, meta);
+    if (!result.ok) {
+      setErrorFor({ empId, message: result.error });
+      setTimeout(() => setErrorFor(cur => (cur?.empId === empId ? null : cur)), 4000);
+      return;
+    }
     setFlashId(empId);
     setTimeout(() => setFlashId(id => (id === empId ? null : id)), 900);
   };
@@ -73,7 +79,14 @@ export default function TodayView({ employees, attendance, now, punch }) {
                   <td style={td}><StatusPill {...status} /></td>
                   <td style={{ ...td, color: COLORS.muted }}>{fmtTime(rec?.checkIn || rec?.wfhCheckIn)}</td>
                   <td style={{ ...td, color: COLORS.muted }}>{fmtTime(rec?.checkOut || rec?.wfhCheckOut)}</td>
-                  <td style={td}><QuickActions emp={emp} rec={rec} punch={handlePunch} /></td>
+                  <td style={td}>
+                    <QuickActions emp={emp} rec={rec} punch={handlePunch} />
+                    {errorFor?.empId === emp.id && (
+                      <div style={{ color: COLORS.red, fontSize: 11.5, fontWeight: 600, marginTop: 5, maxWidth: 220 }}>
+                        {errorFor.message}
+                      </div>
+                    )}
+                  </td>
                 </tr>
               ))}
               {rows.length === 0 && (

@@ -11,6 +11,18 @@ Vercel auto-detects both, so no extra config is needed.
    columns), and `app_users` (admin + employee logins).
 3. Your `SUPABASE_URL` / `SUPABASE_ANON_KEY` live in `src/lib/constants.js`.
 
+## 1b. Server-only env vars (used by the serverless functions, not the browser)
+
+| Key | Example | Used by |
+|-----|---------|---------|
+| `SUPABASE_URL` | `https://xxxx.supabase.co` | `api/attendance/edit.js`, `api/attendance/punch.js`, `api/iclock/cdata.js` |
+| `SUPABASE_SERVICE_ROLE_KEY` | (from Supabase project settings → API) | same as above — these write with elevated privileges, unlike the browser's anon key |
+| `OFFICE_IPS` | `203.0.113.42` or `203.0.113.42,198.51.100.10` or a CIDR range like `203.0.113.0/24` | `api/attendance/punch.js` — the web Check In/Check Out button only works from these IP(s). **Not set = office web punch is disabled for everyone** (fails closed, not open). WFH check-in/out is never affected by this. |
+
+To find your office's public IP: from a computer on the office network, visit
+whatismyip.com or run `curl ifconfig.me`. If the office has multiple
+lines/routers, list all of them comma-separated in `OFFICE_IPS`.
+
 ## 2. Set up email (Nodemailer via a Vercel serverless function)
 
 `api/send-email.js` sends attendance notifications to **hr@rankviz.com** using

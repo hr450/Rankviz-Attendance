@@ -3,7 +3,7 @@ import { COLORS, SUPABASE_CONFIGURED } from "./lib/constants";
 import { todayStr } from "./lib/utils";
 import {
   loadEmployees, saveEmployees, loadAttendance, saveAttendanceRecord,
-  loadAccounts, recKey,
+  loadAccounts, recKey, webPunch,
   loadLeaveTypes, createLeaveType, deleteLeaveType,
   loadLeaveRequests, createLeaveRequest, decideLeaveRequest,
   loadLeaveBalances, saveLeaveBalance,
@@ -140,38 +140,30 @@ export default function App() {
     catch { setSaveState("error"); }
   }, [employees]);
 
-  /* Raw punch — writes to Supabase, no email. Used by both admin quick actions and employee CTAs. */
-  const punch = useCallback((empId, action, meta) => {
+  /* Raw punch — goes through /api/attendance/punch (see lib/db.js webPunch),
+     which verifies office actions against the office IP server-side before
+     writing to Supabase. Returns { ok: true } or { ok: false, error, code }
+     so callers (Today's quick actions, the employee dashboard CTAs) can show
+     the person why a punch was rejected instead of it silently vanishing. */
+  const punch = useCallback(async (empId, action, meta) => {
     const date = todayStr();
     const key = recKey(empId, date);
-    const existing = attendance[key] || { type: "office" };
-    let rec;
-    if (action === "in") rec = { ...existing, checkIn: new Date().toISOString(), type: existing.type === "leave" ? "office" : existing.type || "office" };
-    else if (action === "out") rec = { ...existing, checkOut: new Date().toISOString() };
-    else if (action === "wfh_in") rec = { ...existing, wfhCheckIn: new Date().toISOString(), type: "wfh", wfhReason: meta?.reason, wfhLocation: meta?.location };
-    else if (action === "wfh_out") rec = { ...existing, wfhCheckOut: new Date().toISOString() };
-    // Second session — split-shift employees who work a normal day shift
-    // and then come back for a shorter second session at night. Only
-    // meaningful once the first session's check-out is already in, but we
-    // don't hard-block it here (mirrors how "in"/"out" above don't block
-    // out-of-order taps either — bad taps get caught on review, not by
-    // silently refusing to save).
-    else if (action === "second_in") rec = { ...existing, secondCheckIn: new Date().toISOString() };
-    else if (action === "second_out") rec = { ...existing, secondCheckOut: new Date().toISOString() };
-    else if (action === "leave") rec = { ...existing, type: "leave", checkIn: null, checkOut: null, wfhCheckIn: null, wfhCheckOut: null, secondCheckIn: null, secondCheckOut: null };
-    else if (action === "alternate") rec = { ...existing, alternateDay: true };
-    else return;
-
-    setAttendance(prev => ({ ...prev, [key]: rec }));
     setSaveState("saving");
-    saveAttendanceRecord(empId, date, rec, "web")
-      .then(() => setSaveState("saved"))
-      .catch(() => setSaveState("error"));
-  }, [attendance]);
+    try {
+      const rec = await webPunch(empId, action, meta);
+      setAttendance(prev => ({ ...prev, [key]: rec }));
+      setSaveState("saved");
+      return { ok: true };
+    } catch (e) {
+      setSaveState("error");
+      return { ok: false, error: e.message, code: e.code };
+    }
+  }, []);
 
-  /* Wrapper used by the employee dashboard — punches, then emails HR. */
-  const punchWithNotify = useCallback((empId, action, meta) => {
-    punch(empId, action, meta);
+  /* Wrapper used by the employee dashboard — punches, then emails HR (only on success). */
+  const punchWithNotify = useCallback(async (empId, action, meta) => {
+    const result = await punch(empId, action, meta);
+    if (!result.ok) return result;
     const emp = employees.find(e => e.id === empId);
     const ACTION_LABEL = {
       in: "checked in", out: "checked out", wfh_in: "started working from home",
@@ -188,6 +180,7 @@ export default function App() {
         meta?.location ? `Location: ${meta.location}` : null,
       ].filter(Boolean),
     });
+    return result;
   }, [punch, employees]);
 
   const handleLogin = (acct) => {

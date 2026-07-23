@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { LogIn, LogOut, Home, Coffee, HelpCircle, LogOut as SignOut, Repeat, MapPin, X, Check, CalendarPlus, Clock, Sun, Moon, CloudSun, ListChecks } from "lucide-react";
+import { LogIn, LogOut, Home, Coffee, HelpCircle, LogOut as SignOut, Repeat, MapPin, X, Check, CalendarPlus, Clock, Sun, Moon, CloudSun, ListChecks, WifiOff } from "lucide-react";
 import { COLORS } from "../lib/constants";
 import { computeStatus, fmtTime, fmtHrs, todayStr } from "../lib/utils";
 import { StatusPill, LogoMark, Field, inputStyle, secondaryBtn } from "../components/ui";
@@ -87,6 +87,18 @@ export default function EmployeeDashboard({ employee, attendance, punch, now, on
   const [wfhModal, setWfhModal] = useState(null); // 'in' | 'out' | null
   const [leaveModal, setLeaveModal] = useState(false);
   const [tab, setTab] = useState("attendance"); // 'attendance' | 'leaves' | 'alternate'
+  const [punchError, setPunchError] = useState(null);
+
+  // Office Check in / Check out / alternate-day check-ins are IP-restricted
+  // (see api/attendance/punch.js) — this surfaces the reason when the
+  // office network check rejects the tap, instead of it silently failing.
+  // WFH punches never hit this path with an error, since they skip the IP
+  // check entirely.
+  const handlePunch = async (action, meta) => {
+    setPunchError(null);
+    const result = await punch(employee.id, action, meta);
+    if (!result.ok) setPunchError(result.error);
+  };
 
   const date = todayStr(now);
   const rec = attendance[`${employee.id}|${date}`];
@@ -159,13 +171,14 @@ export default function EmployeeDashboard({ employee, attendance, punch, now, on
                 </div>
 
                 <div className="rv-stagger rv-stagger-3" style={{
-                  display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 14, marginBottom: 22,
+                  display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 14, marginBottom: 10,
                 }}>
-                  <CtaButton icon={LogIn} label="Check in" tone="present" disabled={!canCheckIn} onClick={() => punch(employee.id, "in")} />
-                  <CtaButton icon={LogOut} label="Check out" tone="late" disabled={!canCheckOut} onClick={() => punch(employee.id, "out")} />
+                  <CtaButton icon={LogIn} label="Check in" tone="present" disabled={!canCheckIn} onClick={() => handlePunch("in")} />
+                  <CtaButton icon={LogOut} label="Check out" tone="late" disabled={!canCheckOut} onClick={() => handlePunch("out")} />
                   <CtaButton icon={Home} label="WFH check-in" tone="wfh" disabled={!canWfhIn} onClick={() => setWfhModal("in")} />
                   <CtaButton icon={Home} label="WFH check-out" tone="wfh" disabled={!canWfhOut} onClick={() => setWfhModal("out")} />
                 </div>
+                <PunchErrorBanner message={punchError} />
 
                 <RecentActivity employee={employee} attendance={attendance} now={now} />
               </>
@@ -185,7 +198,7 @@ export default function EmployeeDashboard({ employee, attendance, punch, now, on
             {tab === "alternate" && (
               <>
                 <div className="rv-stagger rv-stagger-2" style={{ marginBottom: 18 }}>
-                  <button onClick={() => punch(employee.id, "alternate")} style={{ ...secondaryBtn, flex: "unset", display: "inline-flex", alignItems: "center", gap: 7 }}>
+                  <button onClick={() => handlePunch("alternate")} style={{ ...secondaryBtn, flex: "unset", display: "inline-flex", alignItems: "center", gap: 7 }}>
                     <Repeat size={16} /> {rec?.alternateDay ? "Unmark alternate day" : "Mark today as alternate day"}
                   </button>
                   {rec?.alternateDay && (
@@ -196,13 +209,14 @@ export default function EmployeeDashboard({ employee, attendance, punch, now, on
                 </div>
 
                 <div className="rv-stagger rv-stagger-3" style={{
-                  display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 14, marginBottom: 22,
+                  display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 14, marginBottom: 10,
                 }}>
-                  <CtaButton icon={LogIn} label="Check in" tone="present" disabled={!canCheckIn} onClick={() => punch(employee.id, "in")} />
-                  <CtaButton icon={LogOut} label="Check out" tone="late" disabled={!canCheckOut} onClick={() => punch(employee.id, "out")} />
+                  <CtaButton icon={LogIn} label="Check in" tone="present" disabled={!canCheckIn} onClick={() => handlePunch("in")} />
+                  <CtaButton icon={LogOut} label="Check out" tone="late" disabled={!canCheckOut} onClick={() => handlePunch("out")} />
                   <CtaButton icon={Home} label="WFH check-in" tone="wfh" disabled={!canWfhIn} onClick={() => setWfhModal("in")} />
                   <CtaButton icon={Home} label="WFH check-out" tone="wfh" disabled={!canWfhOut} onClick={() => setWfhModal("out")} />
                 </div>
+                <PunchErrorBanner message={punchError} />
 
                 <AlternateDayLog employee={employee} attendance={attendance} />
               </>
@@ -281,6 +295,23 @@ function CtaButton({ icon: Icon, label, tone, disabled, onClick }) {
       <Icon size={22} />
       {label}
     </button>
+  );
+}
+
+/* Shown when an office Check in / Check out / alternate-day punch is
+   rejected — almost always because the employee isn't on the office
+   network. WFH punches never trigger this since they skip the IP check. */
+function PunchErrorBanner({ message }) {
+  if (!message) return null;
+  return (
+    <div className="rv-anim-fadein" style={{
+      display: "flex", alignItems: "flex-start", gap: 10, background: "#FBE8E7", color: "#B23B36",
+      border: "1px solid #F3C7C4", borderRadius: 12, padding: "12px 14px", fontSize: 13, fontWeight: 600,
+      marginBottom: 22, lineHeight: 1.5,
+    }}>
+      <WifiOff size={16} style={{ flexShrink: 0, marginTop: 1 }} />
+      <span>{message}</span>
+    </div>
   );
 }
 
