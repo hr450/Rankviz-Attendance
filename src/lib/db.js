@@ -81,6 +81,17 @@ export async function saveEmployees(next, prev) {
   }
 }
 
+// Used by Monthly Report's "Change shift" option in the correction modal.
+// Updates the employee's permanent shift start/end going forward — there's
+// no per-day shift override column, so this changes the standing shift,
+// not just the one day being corrected. The modal makes that explicit.
+export async function updateEmployeeShift(employeeId, shiftStart, shiftEnd) {
+  await supaFetch(`employees?id=eq.${encodeURIComponent(employeeId)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ shift_start: shiftStart, shift_end: shiftEnd }),
+  });
+}
+
 /* ---------------- Attendance ---------------- */
 export async function loadAttendance() {
   const rows = await supaFetchAll("attendance?select=*");

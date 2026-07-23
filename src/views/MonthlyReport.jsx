@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, Coffee, Repeat, Home, Pencil, X, CalendarHea
 import { COLORS } from "../lib/constants";
 import { computeStatus, fmtTime, fmtHrs, monthKey, daysInMonth, todayStr } from "../lib/utils";
 import { StatusPill, StatCard, selectStyle, th, td } from "../components/ui";
+import { updateEmployeeShift } from "../lib/db";
 
 export default function MonthlyReportView({ employees, attendance, now, onSaveEdit, session, publicHolidays = [] }) {
   const [empId, setEmpId] = useState(employees[0]?.id || "");
@@ -171,7 +172,7 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
       {editingDate && (
         <EditAttendanceModal
           date={editingDate}
-          empName={emp.name}
+          emp={emp}
           rec={attendance[`${emp.id}|${editingDate}`]}
           onClose={() => setEditingDate(null)}
           onSave={async (patch) => {
@@ -200,13 +201,17 @@ function fromDatetimeLocal(str) {
   return isNaN(d.getTime()) ? null : d.toISOString();
 }
 
-function EditAttendanceModal({ date, empName, rec, onClose, onSave }) {
+function EditAttendanceModal({ date, emp, rec, onClose, onSave }) {
+  const empName = emp.name;
   const [checkIn, setCheckIn] = useState(toDatetimeLocal(rec?.checkIn));
   const [checkOut, setCheckOut] = useState(toDatetimeLocal(rec?.checkOut));
   const [showSecond, setShowSecond] = useState(!!(rec?.secondCheckIn || rec?.secondCheckOut));
   const [secondCheckIn, setSecondCheckIn] = useState(toDatetimeLocal(rec?.secondCheckIn));
   const [secondCheckOut, setSecondCheckOut] = useState(toDatetimeLocal(rec?.secondCheckOut));
   const [notes, setNotes] = useState(rec?.notes || "");
+  const [showShift, setShowShift] = useState(false);
+  const [shiftStart, setShiftStart] = useState(emp.shiftStart || "09:30");
+  const [shiftEnd, setShiftEnd] = useState(emp.shiftEnd || "18:30");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
@@ -222,6 +227,9 @@ function EditAttendanceModal({ date, empName, rec, onClose, onSave }) {
     }
     setSaving(true);
     try {
+      if (showShift && (shiftStart !== emp.shiftStart || shiftEnd !== emp.shiftEnd)) {
+        await updateEmployeeShift(emp.id, shiftStart, shiftEnd);
+      }
       const patch = { check_in: inVal, check_out: outVal, notes };
       if (showSecond) {
         patch.second_check_in = fromDatetimeLocal(secondCheckIn);
@@ -275,6 +283,24 @@ function EditAttendanceModal({ date, empName, rec, onClose, onSave }) {
               <Field label="Second check-out">
                 <input type="datetime-local" value={secondCheckOut} onChange={e => setSecondCheckOut(e.target.value)} style={inputStyle} />
               </Field>
+            </>
+          )}
+
+          {!showShift ? (
+            <button onClick={() => setShowShift(true)} style={linkBtn}>+ Change shift</button>
+          ) : (
+            <>
+              <div style={{ display: "flex", gap: 10 }}>
+                <Field label="Shift start">
+                  <input type="time" value={shiftStart} onChange={e => setShiftStart(e.target.value)} style={inputStyle} />
+                </Field>
+                <Field label="Shift end">
+                  <input type="time" value={shiftEnd} onChange={e => setShiftEnd(e.target.value)} style={inputStyle} />
+                </Field>
+              </div>
+              <p style={{ margin: "-6px 0 0", fontSize: 11.5, color: COLORS.muted }}>
+                This updates {empName}'s standing shift going forward — not just this one day.
+              </p>
             </>
           )}
 
