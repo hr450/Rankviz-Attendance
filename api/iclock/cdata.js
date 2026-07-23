@@ -167,7 +167,10 @@ async function findEmployeeByZkId(zkUserId) {
 // the day" as a genuine check-in. Generous on purpose — this only exists to
 // catch the clearly-wrong cases (e.g. someone's only punch of the day is
 // well into the evening), not to second-guess every late arrival.
-const LATE_FIRST_PUNCH_BUFFER_MIN = 120; // 2 hours past shift_end
+const LATE_FIRST_PUNCH_BUFFER_MIN = 30; // 30 min past shift_end
+// Fallback for employees with no shift_end on record: still flag a lone
+// first punch landing this late in the day (24h clock, local time).
+const LATE_FIRST_PUNCH_FALLBACK_HOUR = 15; // 3:00 PM
 
 // Returns a human-readable flag string if `punchTime` looks too late to
 // plausibly be a genuine FIRST check-in for this employee (i.e. it's more
@@ -177,16 +180,26 @@ const LATE_FIRST_PUNCH_BUFFER_MIN = 120; // 2 hours past shift_end
 // changes whether it's saved silently or flagged for HR to review/correct
 // via /api/attendance/edit.
 function lateFirstPunchFlag(employee, punchTime) {
-  if (!employee || !employee.shift_end) return null;
-  const [endH, endM] = employee.shift_end.split(":").map(Number);
-  if (Number.isNaN(endH) || Number.isNaN(endM)) return null;
-
   const local = toLocalParts(punchTime);
   const punchMinutes = local.hour * 60 + punchTime.getUTCMinutes();
-  const shiftEndMinutes = endH * 60 + endM;
 
-  if (punchMinutes >= shiftEndMinutes + LATE_FIRST_PUNCH_BUFFER_MIN) {
-    return `Auto-flag: first punch today was ${employee.shift_end ? `well after shift end (${employee.shift_end})` : "unusually late"} with no prior check-in — likely a missed check-in, not a real one. Review and correct via Monthly Report.`;
+  const shiftEnd = employee && employee.shift_end;
+  if (shiftEnd) {
+    const [endH, endM] = shiftEnd.split(":").map(Number);
+    if (!Number.isNaN(endH) && !Number.isNaN(endM)) {
+      const shiftEndMinutes = endH * 60 + endM;
+      if (punchMinutes >= shiftEndMinutes + LATE_FIRST_PUNCH_BUFFER_MIN) {
+        return `Auto-flag: first punch today was well after shift end (${shiftEnd}) with no prior check-in — likely a missed check-in, not a real one. Review and correct via Monthly Report.`;
+      }
+      return null;
+    }
+  }
+
+  // No usable shift_end on record -> fall back to a fixed clock cutoff so a
+  // lone afternoon/evening punch still gets flagged instead of silently
+  // logged as an unclosed check-in.
+  if (local.hour >= LATE_FIRST_PUNCH_FALLBACK_HOUR) {
+    return `Auto-flag: first punch today was unusually late (${String(local.hour).padStart(2, "0")}:${String(punchTime.getUTCMinutes()).padStart(2, "0")}) with no prior check-in — likely a missed check-in, not a real one. Review and correct via Monthly Report.`;
   }
   return null;
 }
