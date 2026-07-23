@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plus, Edit2, Trash2, Check, X, KeyRound } from "lucide-react";
+import { Plus, Edit2, Trash2, Check, X, KeyRound, UserX, UserCheck } from "lucide-react";
 import { COLORS, DEPARTMENTS } from "../lib/constants";
 import { uid } from "../lib/utils";
 import { upsertEmployeeCredentials } from "../lib/db";
@@ -8,21 +8,48 @@ import { IconBtn, Field, inputStyle, primaryBtn, secondaryBtn, th, td } from "..
 export default function EmployeesView({ employees, setEmployees, accounts, refreshAccounts }) {
   const [editing, setEditing] = useState(null);
   const [credsFor, setCredsFor] = useState(null);
+  const [filter, setFilter] = useState("active"); // active | inactive | all
   const isOpen = editing !== null;
 
-  const remove = (id) => setEmployees(employees.filter(e => e.id !== id));
+  // Soft delete: flips `active` to false but keeps the row in the array,
+  // so the save diff in App.jsx/db.js sees it as an update (merge), not a
+  // removal — nothing gets hard-deleted from Supabase, and the employee's
+  // attendance history stays intact.
+  const deactivate = (id) => setEmployees(employees.map(e => e.id === id ? { ...e, active: false } : e));
+  const reactivate = (id) => setEmployees(employees.map(e => e.id === id ? { ...e, active: true } : e));
+
+  // Genuinely removes the row (e.g. a duplicate/test entry added by
+  // mistake) — kept separate from the everyday "employee left" flow, and
+  // gated behind a confirmation since it's the one destructive path left.
+  const permanentlyDelete = (id, name) => {
+    if (!window.confirm(`Permanently delete ${name}? This cannot be undone — for someone who's left, use Deactivate instead.`)) return;
+    setEmployees(employees.filter(e => e.id !== id));
+  };
 
   const save = (emp) => {
     if (emp.id) setEmployees(employees.map(e => e.id === emp.id ? emp : e));
-    else setEmployees([...employees, { ...emp, id: uid("emp") }]);
+    else setEmployees([...employees, { ...emp, id: uid("emp"), active: true }]);
     setEditing(null);
   };
+
+  const visibleEmployees = employees.filter(e => {
+    if (filter === "active") return e.active !== false;
+    if (filter === "inactive") return e.active === false;
+    return true;
+  });
 
   return (
     <div className="rv-anim-fadein">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18, gap: 10, flexWrap: "wrap" }}>
         <h1 style={{ fontSize: 26, fontWeight: 800, margin: 0 }}>Employees</h1>
-        <button onClick={() => setEditing({})} style={primaryBtn}><Plus size={16} /> Add employee</button>
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <select value={filter} onChange={e => setFilter(e.target.value)} style={{ ...inputStyle, width: "auto" }}>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+            <option value="all">All</option>
+          </select>
+          <button onClick={() => setEditing({})} style={primaryBtn}><Plus size={16} /> Add employee</button>
+        </div>
       </div>
 
       <div className="rv-card" style={{ padding: "16px 20px", overflowX: "auto" }}>
@@ -30,18 +57,27 @@ export default function EmployeesView({ employees, setEmployees, accounts, refre
           <thead>
             <tr style={{ color: COLORS.muted, fontSize: 12.5, textAlign: "left" }}>
               <th style={th}>Name</th><th style={th}>Department</th><th style={th}>Type</th>
-              <th style={th}>Shift</th><th style={th}>Login</th><th style={th}></th>
+              <th style={th}>Shift</th><th style={th}>Status</th><th style={th}>Login</th><th style={th}></th>
             </tr>
           </thead>
           <tbody>
-            {employees.map((emp, i) => {
+            {visibleEmployees.map((emp, i) => {
               const acct = accounts?.[emp.id];
+              const active = emp.active !== false;
               return (
-                <tr key={emp.id} className="rv-row-in" style={{ borderTop: `1px solid ${COLORS.line}`, animationDelay: `${i * 30}ms` }}>
+                <tr key={emp.id} className="rv-row-in" style={{ borderTop: `1px solid ${COLORS.line}`, animationDelay: `${i * 30}ms`, opacity: active ? 1 : 0.6 }}>
                   <td style={td}><strong>{emp.name}</strong></td>
                   <td style={{ ...td, color: COLORS.muted }}>{emp.department}</td>
                   <td style={{ ...td, color: COLORS.muted }}>{emp.employmentType}</td>
                   <td style={{ ...td, color: COLORS.muted }}>{emp.shiftStart}–{emp.shiftEnd}</td>
+                  <td style={td}>
+                    <span style={{
+                      fontSize: 11.5, fontWeight: 700, padding: "3px 9px", borderRadius: 999,
+                      background: active ? "#E3F5E8" : "#F1F1F3", color: active ? COLORS.green : COLORS.muted,
+                    }}>
+                      {active ? "Active" : "Inactive"}
+                    </span>
+                  </td>
                   <td style={td}>
                     {acct ? (
                       <span style={{ fontSize: 12.5, fontWeight: 700, color: COLORS.green }}>{acct.username}</span>
@@ -53,14 +89,21 @@ export default function EmployeesView({ employees, setEmployees, accounts, refre
                     <div style={{ display: "flex", gap: 6 }}>
                       <IconBtn title={acct ? "Reset login" : "Create login"} onClick={() => setCredsFor(emp)}><KeyRound size={14} /></IconBtn>
                       <IconBtn title="Edit" onClick={() => setEditing(emp)}><Edit2 size={14} /></IconBtn>
-                      <IconBtn title="Remove" onClick={() => remove(emp.id)}><Trash2 size={14} /></IconBtn>
+                      {active ? (
+                        <IconBtn title="Deactivate (employee left)" onClick={() => deactivate(emp.id)}><UserX size={14} /></IconBtn>
+                      ) : (
+                        <IconBtn title="Reactivate" onClick={() => reactivate(emp.id)}><UserCheck size={14} /></IconBtn>
+                      )}
+                      <IconBtn title="Permanently delete" onClick={() => permanentlyDelete(emp.id, emp.name)}><Trash2 size={14} /></IconBtn>
                     </div>
                   </td>
                 </tr>
               );
             })}
-            {employees.length === 0 && (
-              <tr><td colSpan={6} style={{ ...td, color: COLORS.muted, textAlign: "center", padding: "26px 0" }}>No employees yet.</td></tr>
+            {visibleEmployees.length === 0 && (
+              <tr><td colSpan={7} style={{ ...td, color: COLORS.muted, textAlign: "center", padding: "26px 0" }}>
+                {filter === "inactive" ? "No inactive employees." : filter === "active" ? "No active employees." : "No employees yet."}
+              </td></tr>
             )}
           </tbody>
         </table>

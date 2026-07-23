@@ -52,14 +52,14 @@ function empToRow(e) {
   return {
     id: e.id, name: e.name, department: e.department,
     employment_type: e.employmentType, shift_start: e.shiftStart, shift_end: e.shiftEnd,
-    zk_user_id: e.zkUserId || null,
+    zk_user_id: e.zkUserId || null, active: e.active !== false,
   };
 }
 function rowToEmp(r) {
   return {
     id: r.id, name: r.name, department: r.department,
     employmentType: r.employment_type, shiftStart: r.shift_start, shiftEnd: r.shift_end,
-    zkUserId: r.zk_user_id || "",
+    zkUserId: r.zk_user_id || "", active: r.active !== false,
   };
 }
 export async function loadEmployees() {

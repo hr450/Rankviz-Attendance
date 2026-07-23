@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Building2, Users, BarChart3, FileText, X, Menu, LogOut, CalendarCheck, CalendarDays, Wallet } from "lucide-react";
+import { Building2, Users, BarChart3, FileText, X, Menu, LogOut, CalendarCheck, CalendarDays, Wallet, CalendarHeart } from "lucide-react";
 import { COLORS } from "../lib/constants";
 import { LogoMark } from "./ui";
 
@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { id: "leaveBalances", label: "Leave Balances", icon: Wallet },
   { id: "reports", label: "Reports", icon: BarChart3 },
   { id: "monthly", label: "Monthly Report", icon: FileText },
+  { id: "holidays", label: "Public Holidays", icon: CalendarHeart },
 ];
 
 export default function Shell({ children, tab, setTab, saveState, account, onLogout }) {
