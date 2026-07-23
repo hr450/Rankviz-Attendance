@@ -290,7 +290,7 @@ export default function App() {
         {tab === "today" && <TodayView employees={employees} attendance={attendance} now={now} punch={punch} />}
         {tab === "log" && <LogView employees={employees} attendance={attendance} now={now} />}
         {tab === "employees" && (
-          <EmployeesView employees={employees} setEmployees={persistEmployees} accounts={accountsByEmp} refreshAccounts={refreshAccounts} />
+          <EmployeesView employees={employees} setEmployees={persistEmployees} accounts={accountsByEmp} refreshAccounts={refreshAccounts} attendance={attendance} />
         )}
         {tab === "reports" && <ReportsView employees={employees} attendance={attendance} now={now} />}
         {tab === "monthly" && (

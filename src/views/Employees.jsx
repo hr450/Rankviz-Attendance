@@ -1,15 +1,70 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Plus, Edit2, Trash2, Check, X, KeyRound, UserX, UserCheck } from "lucide-react";
 import { COLORS, DEPARTMENTS } from "../lib/constants";
 import { uid } from "../lib/utils";
 import { upsertEmployeeCredentials } from "../lib/db";
 import { IconBtn, Field, inputStyle, primaryBtn, secondaryBtn, th, td } from "../components/ui";
 
-export default function EmployeesView({ employees, setEmployees, accounts, refreshAccounts }) {
+// An employee counts as "active" (in the auto sense) if they've had ANY of
+// these within the last AUTO_INACTIVE_DAYS: an office check-in, a WFH
+// check-in, an approved leave day, or an alternate day. All four reset the
+// clock — only genuine silence (no record of any kind) counts against them.
+// Weekends/holidays never count against them either way, since there's no
+// punch expected on those days regardless.
+const AUTO_INACTIVE_DAYS = 30;
+
+function lastActivityDate(empId, attendance) {
+  let last = null;
+  const prefix = `${empId}|`;
+  for (const key in attendance) {
+    if (!key.startsWith(prefix)) continue;
+    const rec = attendance[key];
+    const hasActivity = !!(rec?.checkIn || rec?.wfhCheckIn || rec?.type === "leave" || rec?.alternateDay);
+    if (!hasActivity) continue;
+    const date = key.slice(prefix.length);
+    if (!last || date > last) last = date;
+  }
+  return last; // "YYYY-MM-DD" or null if this employee has no activity on record at all
+}
+
+function daysSince(dateStr, now) {
+  const d = new Date(dateStr + "T00:00:00");
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.floor((today - d) / 86400000);
+}
+
+export default function EmployeesView({ employees, setEmployees, accounts, refreshAccounts, attendance }) {
   const [editing, setEditing] = useState(null);
   const [credsFor, setCredsFor] = useState(null);
   const [filter, setFilter] = useState("active"); // active | inactive | all
   const isOpen = editing !== null;
+
+  // Auto Active/Inactive sync — runs whenever attendance data changes.
+  // Employees with no activity of any kind (office punch, WFH punch,
+  // approved leave, or alternate day) for more than AUTO_INACTIVE_DAYS get
+  // auto-flipped to Inactive; employees who resume activity get
+  // auto-flipped back to Active. Employees with NO attendance history at
+  // all (e.g. just added, or added before any punches came in) are left
+  // untouched — there's no way to tell "brand new hire" apart from "empty
+  // record" from attendance alone, so this only acts once there's at least
+  // one activity date to measure silence against.
+  useEffect(() => {
+    if (!attendance || employees.length === 0) return;
+    const now = new Date();
+    let changed = false;
+    const next = employees.map(emp => {
+      const last = lastActivityDate(emp.id, attendance);
+      if (!last) return emp; // no history yet — leave status as-is
+      const silentDays = daysSince(last, now);
+      const shouldBeActive = silentDays <= AUTO_INACTIVE_DAYS;
+      const currentlyActive = emp.active !== false;
+      if (shouldBeActive === currentlyActive) return emp;
+      changed = true;
+      return { ...emp, active: shouldBeActive };
+    });
+    if (changed) setEmployees(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attendance]);
 
   // Soft delete: flips `active` to false but keeps the row in the array,
   // so the save diff in App.jsx/db.js sees it as an update (merge), not a
@@ -40,7 +95,7 @@ export default function EmployeesView({ employees, setEmployees, accounts, refre
 
   return (
     <div className="rv-anim-fadein">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18, gap: 10, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, gap: 10, flexWrap: "wrap" }}>
         <h1 style={{ fontSize: 26, fontWeight: 800, margin: 0 }}>Employees</h1>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           <select value={filter} onChange={e => setFilter(e.target.value)} style={{ ...inputStyle, width: "auto" }}>
@@ -51,6 +106,10 @@ export default function EmployeesView({ employees, setEmployees, accounts, refre
           <button onClick={() => setEditing({})} style={primaryBtn}><Plus size={16} /> Add employee</button>
         </div>
       </div>
+      <p style={{ color: COLORS.muted, fontSize: 12.5, margin: "0 0 18px" }}>
+        Active/Inactive updates automatically: {AUTO_INACTIVE_DAYS}+ days with no check-in, WFH check-in, leave, or
+        alternate day moves someone to Inactive; any of those resuming moves them back to Active.
+      </p>
 
       <div className="rv-card" style={{ padding: "16px 20px", overflowX: "auto" }}>
         <table className="rv-table-hover" style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
