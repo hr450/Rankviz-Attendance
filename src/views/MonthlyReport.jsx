@@ -5,6 +5,17 @@ import { computeStatus, fmtTime, fmtHrs, monthKey, daysInMonth, todayStr } from 
 import { StatusPill, StatCard, selectStyle, th, td } from "../components/ui";
 import { updateEmployeeShift } from "../lib/db";
 
+// cdata.js flags a lone punch that lands well after shift_end (with no
+// earlier punch that day) by prefixing its auto-note with "Auto-flag:" —
+// it still has to store the raw punch time SOMEWHERE (check_in is the
+// only field a first punch of the day can land in), but it's really a
+// checkout with a missed/lost check-in, not a genuine check-in. Detect
+// that here so the table shows "No check-in" instead of presenting the
+// evening time as if someone arrived then.
+function isFlaggedNotARealCheckIn(rec) {
+  return !!(rec?.notes && rec.notes.startsWith("Auto-flag:") && rec?.checkIn && !rec?.checkOut);
+}
+
 export default function MonthlyReportView({ employees, attendance, now, onSaveEdit, session, publicHolidays = [] }) {
   const [empId, setEmpId] = useState(employees[0]?.id || "");
   const [ym, setYm] = useState(monthKey(todayStr(now)));
@@ -104,13 +115,18 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
                 : (r.rec?.wfhCheckIn && r.rec?.wfhCheckOut) ? (new Date(r.rec.wfhCheckOut) - new Date(r.rec.wfhCheckIn)) / 3600000
                 : null;
               const missedCheckout = (r.rec?.checkIn && !r.rec?.checkOut) || (r.rec?.wfhCheckIn && !r.rec?.wfhCheckOut);
+              const flaggedNotReal = isFlaggedNotARealCheckIn(r.rec);
               return (
                 <tr key={r.date} className="rv-row-in" style={{ borderTop: `1px solid ${COLORS.line}`, animationDelay: `${i * 25}ms` }}>
                   <td style={td}>{new Date(r.date + "T00:00:00").toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}</td>
                   <td style={td}><StatusPill {...r.status} /></td>
-                  <td style={{ ...td, color: COLORS.muted }}>{fmtTime(r.rec?.checkIn)}</td>
-                  <td style={{ ...td, color: missedCheckout ? COLORS.red : COLORS.muted, fontWeight: missedCheckout ? 700 : 400 }}>
-                    {r.rec?.checkIn ? (r.rec?.checkOut ? fmtTime(r.rec.checkOut) : "No checkout") : "—"}
+                  <td style={{ ...td, color: flaggedNotReal ? COLORS.red : COLORS.muted, fontWeight: flaggedNotReal ? 700 : 400 }}>
+                    {flaggedNotReal ? "No check-in" : fmtTime(r.rec?.checkIn)}
+                  </td>
+                  <td style={{ ...td, color: (missedCheckout && !flaggedNotReal) ? COLORS.red : COLORS.muted, fontWeight: (missedCheckout && !flaggedNotReal) ? 700 : 400 }}>
+                    {flaggedNotReal
+                      ? `${fmtTime(r.rec.checkIn)} (likely checkout — no check-in recorded)`
+                      : r.rec?.checkIn ? (r.rec?.checkOut ? fmtTime(r.rec.checkOut) : "No checkout") : "—"}
                   </td>
                   <td style={{ ...td, color: COLORS.muted }}>{fmtTime(r.rec?.wfhCheckIn)}</td>
                   <td style={{ ...td, color: missedCheckout ? COLORS.red : COLORS.muted, fontWeight: missedCheckout ? 700 : 400 }}>
