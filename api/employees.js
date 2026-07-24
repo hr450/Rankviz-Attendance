@@ -2,8 +2,8 @@
 // POST /api/employees  { next: [...], prev: [...] }  — save changes (admin only)
 // Header: Authorization: Bearer <token from /api/auth/login>
 
-import { supaAdminFetch } from "../lib/supabaseAdmin.js";
-import { requireRole } from "../lib/authToken.js";
+import { supaAdminFetch } from "../src/lib/supabaseAdmin.js";
+import { requireRole } from "../src/lib/authToken.js";
 
 function empToRow(e) {
   return {

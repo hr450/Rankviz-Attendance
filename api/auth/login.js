@@ -2,8 +2,8 @@
 // Verifies credentials server-side. The password (hash or plain) never
 // reaches the browser — only a signed session token + safe user fields do.
 
-import { supaAdminFetch } from "../../lib/supabaseAdmin.js";
-import { signToken } from "../../lib/authToken.js";
+import { supaAdminFetch } from "../../src/lib/supabaseAdmin.js";
+import { signToken } from "../../src/lib/authToken.js";
 import bcrypt from "bcryptjs";
 
 export default async function handler(req, res) {

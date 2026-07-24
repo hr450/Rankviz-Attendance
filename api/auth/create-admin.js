@@ -5,8 +5,8 @@
 // sign-up path for HR/admin accounts anywhere in this app anymore — this
 // is the only way a new one gets created, and it's gated.
 
-import { supaAdminFetch } from "../../lib/supabaseAdmin.js";
-import { requireRole } from "../../lib/authToken.js";
+import { supaAdminFetch } from "../../src/lib/supabaseAdmin.js";
+import { requireRole } from "../../src/lib/authToken.js";
 import bcrypt from "bcryptjs";
 
 function uid(prefix) {

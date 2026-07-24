@@ -5,8 +5,8 @@
 // Note: employee self check-in/out already goes through /api/attendance/punch.js
 // (IP-restricted). This route is for HR making manual corrections/edits.
 
-import { supaAdminFetch, } from "../lib/supabaseAdmin.js";
-import { requireRole } from "../lib/authToken.js";
+import { supaAdminFetch, } from "../src/lib/supabaseAdmin.js";
+import { requireRole } from "../src/lib/authToken.js";
 
 // PostgREST caps a single request at ~1000 rows — page through with Range headers.
 async function supaAdminFetchAll(path, pageSize = 1000) {
