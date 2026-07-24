@@ -20,6 +20,7 @@ import TodayView from "./views/Today";
 import LogView from "./views/Log";
 import EmployeesView from "./views/Employees";
 import ReportsView from "./views/Reports";
+import AttendanceStatsView from "./views/AttendanceStats";
 import MonthlyReportView from "./views/MonthlyReport";
 import EmployeeDashboard from "./views/EmployeeDashboard";
 import LeaveApprovalsView from "./views/LeaveApprovals";
@@ -40,6 +41,16 @@ export default function App() {
 
   const [session, setSession] = useState(null); // {id, username, role, employeeId, name}
   const [tab, setTab] = useState("today");
+
+  // Active/Inactive/All filter — controlled from the top bar (see Shell.jsx)
+  // and applied to every tab that lists employees, same active/all/inactive
+  // rule Employees.jsx already used for its own view.
+  const [employeeFilter, setEmployeeFilter] = useState("active");
+  const filteredEmployees = employees.filter(e => {
+    if (employeeFilter === "active") return e.active !== false;
+    if (employeeFilter === "inactive") return e.active === false;
+    return true;
+  });
 
   const [leaveTypes, setLeaveTypes] = useState([]);
   const [leaveRequests, setLeaveRequests] = useState([]);
@@ -140,10 +151,14 @@ export default function App() {
   }, []);
 
   /* Manual HR/admin correction — used by MonthlyReport's per-row Edit
-     modal. Hits the existing /api/attendance/edit endpoint (sets
-     manually_edited/edited_by/edited_at server-side); this just wires a
-     UI to it and folds the corrected fields back into local state.
-     Fields not present in `patch` are left untouched. */
+     modal AND its Status-Edit dropdown. Hits the existing /api/attendance/edit
+     endpoint (sets manually_edited/edited_by/edited_at server-side); this
+     just wires a UI to it and folds the corrected fields back into local
+     state. Fields not present in `patch` are left untouched.
+     NOTE: the dropdown sends { manual_status } — /api/attendance/edit.js
+     needs a manual_status column (attendance table) and to pass it through
+     on read/write for this to actually persist; it's not in the uploaded
+     files so it isn't edited here. */
   const saveManualEdit = useCallback(async (employeeId, date, patch) => {
     setSaveState("saving");
     const res = await fetch("/api/attendance/edit", {
@@ -172,6 +187,7 @@ export default function App() {
         ...("second_check_in" in row ? { secondCheckIn: row.second_check_in } : {}),
         ...("second_check_out" in row ? { secondCheckOut: row.second_check_out } : {}),
         ...("notes" in row ? { notes: row.notes || "" } : {}),
+        ...("manual_status" in row ? { manualStatus: row.manual_status || null } : {}),
         manuallyEdited: true,
         editedBy: row.edited_by || session?.name || session?.username || "HR",
         editedAt: row.edited_at || new Date().toISOString(),
@@ -303,16 +319,35 @@ export default function App() {
 
   return (
     <div style={{ fontFamily: "'Inter', system-ui, sans-serif", background: COLORS.bg, minHeight: "100vh", color: COLORS.ink }}>
-      <Shell tab={tab} setTab={setTab} saveState={saveState} account={session} onLogout={handleLogout}>
-        {tab === "today" && <TodayView employees={employees} attendance={attendance} now={now} punch={punch} />}
-        {tab === "log" && <LogView employees={employees} attendance={attendance} now={now} />}
+      <Shell
+        tab={tab} setTab={setTab} saveState={saveState} account={session} onLogout={handleLogout}
+        employeeFilter={employeeFilter} setEmployeeFilter={setEmployeeFilter}
+      >
+        {tab === "today" && <TodayView employees={filteredEmployees} attendance={attendance} now={now} punch={punch} />}
+        {tab === "log" && <LogView employees={filteredEmployees} attendance={attendance} now={now} />}
         {tab === "employees" && (
-          <EmployeesView employees={employees} setEmployees={persistEmployees} accounts={accountsByEmp} refreshAccounts={refreshAccounts} attendance={attendance} />
+          <EmployeesView
+            employees={employees}
+            setEmployees={persistEmployees}
+            accounts={accountsByEmp}
+            refreshAccounts={refreshAccounts}
+            attendance={attendance}
+            filter={employeeFilter}
+            setFilter={setEmployeeFilter}
+          />
         )}
-        {tab === "reports" && <ReportsView employees={employees} attendance={attendance} now={now} />}
+        {tab === "reports" && <ReportsView employees={filteredEmployees} attendance={attendance} now={now} />}
+        {tab === "stats" && (
+          <AttendanceStatsView
+            employees={filteredEmployees}
+            attendance={attendance}
+            now={now}
+            publicHolidays={publicHolidays}
+          />
+        )}
         {tab === "monthly" && (
           <MonthlyReportView
-            employees={employees}
+            employees={filteredEmployees}
             attendance={attendance}
             now={now}
             onSaveEdit={saveManualEdit}
@@ -329,7 +364,7 @@ export default function App() {
         )}
         {tab === "leaveApprovals" && (
           <LeaveApprovalsView
-            employees={employees}
+            employees={filteredEmployees}
             leaveTypes={leaveTypes}
             leaveRequests={leaveRequests}
             onDecide={decideLeave}
@@ -339,7 +374,7 @@ export default function App() {
         )}
         {tab === "leaveSummary" && (
           <LeaveSummaryView
-            employees={employees}
+            employees={filteredEmployees}
             attendance={attendance}
             leaveRequests={leaveRequests}
             now={now}
@@ -347,7 +382,7 @@ export default function App() {
         )}
         {tab === "leaveBalances" && (
           <LeaveBalancesView
-            employees={employees}
+            employees={filteredEmployees}
             leaveBalances={leaveBalances}
             onUpdate={updateLeaveBalance}
           />

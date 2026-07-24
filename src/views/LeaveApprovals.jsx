@@ -28,8 +28,14 @@ export default function LeaveApprovalsView({ employees, leaveTypes, leaveRequest
 
   const empName = (id) => employees.find(e => e.id === id)?.name || "Unknown employee";
 
-  const pending = leaveRequests.filter(r => r.status === "pending");
-  const decided = leaveRequests.filter(r => r.status !== "pending");
+  // `employees` arrives pre-filtered by the top bar's Active/Inactive/All
+  // control, so restrict requests to those employees too — otherwise a
+  // request from someone filtered out would still show up here.
+  const visibleIds = new Set(employees.map(e => e.id));
+  const visibleRequests = leaveRequests.filter(r => visibleIds.has(r.employeeId));
+
+  const pending = visibleRequests.filter(r => r.status === "pending");
+  const decided = visibleRequests.filter(r => r.status !== "pending");
 
   const decide = async (req, status) => {
     setBusyId(req.id);

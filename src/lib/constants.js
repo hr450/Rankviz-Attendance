@@ -24,6 +24,19 @@ export const DEPARTMENTS = [
 export const GRACE_MIN = 15;
 export const HALFDAY_HOURS = 4.5;
 
+// Options for Monthly Report's per-row "Status-Edit" dropdown. Value ""
+// means "Auto" — clears any manual override so computeStatus() goes back
+// to calculating the status from check-in/check-out times.
+export const MANUAL_STATUS_OPTIONS = [
+  { value: "", label: "Auto" },
+  { value: "present", label: "Present" },
+  { value: "half", label: "Half Day" },
+  { value: "wfh", label: "WFH" },
+  { value: "short_leave", label: "Short Leave" },
+  { value: "holiday", label: "Holiday" },
+  { value: "absent", label: "Absent" },
+];
+
 export const HR_NOTIFY_EMAIL = "hr@rankviz.com";
 
 // Fill these in after running supabase_schema.sql in your Supabase project

@@ -32,9 +32,24 @@ export function daysInMonth(ym) {
   return new Date(y, m, 0).getDate();
 }
 
-// rec: {checkIn, checkOut, type, wfhCheckIn, wfhCheckOut, alternateDay}
+// Label shown for a manual status override — keyed by the same tone names
+// used in TONE_STYLES below, so an override always renders with a color
+// that matches its meaning elsewhere in the app.
+export const MANUAL_STATUS_LABELS = {
+  present: "Present", half: "Half Day", wfh: "WFH",
+  short_leave: "Short Leave", holiday: "Holiday", absent: "Absent",
+};
+
+// rec: {checkIn, checkOut, type, wfhCheckIn, wfhCheckOut, alternateDay, manualStatus}
 // dateStr: "YYYY-MM-DD" for the day being evaluated — needed to detect weekends
 export function computeStatus(emp, rec, isPastDay, nowMinutes, dateStr) {
+  // A manual override (set from the Monthly Report's Status-Edit dropdown)
+  // wins outright — skip the check-in/check-out calculation entirely so HR's
+  // explicit choice is never second-guessed by the auto logic.
+  if (rec?.manualStatus) {
+    return { label: MANUAL_STATUS_LABELS[rec.manualStatus] || rec.manualStatus, tone: rec.manualStatus, manual: true };
+  }
+
   const hasOfficePunch = !!rec?.checkIn;
   const hasWfhPunch = !!rec?.wfhCheckIn;
   const workedAnyway = hasOfficePunch || hasWfhPunch || rec?.alternateDay;
@@ -85,6 +100,7 @@ export const TONE_STYLES = {
   no_checkout: { bg: "#FDEDE3", fg: "#D97A3F", dot: "#D97A3F" },
   absent: { bg: "#FBE8E7", fg: "#D9534F", dot: "#D9534F" },
   leave: { bg: "#E9EEFC", fg: "#3E5A9E", dot: "#3E5A9E" },
+  short_leave: { bg: "#EFEAFB", fg: "#6C4FC9", dot: "#6C4FC9" },
   pending: { bg: "#EEF0F9", fg: "#5E6B85", dot: "#B7BBD6" },
   holiday: { bg: "#F0EDF9", fg: "#7B61B3", dot: "#7B61B3" },
   blank: { bg: "transparent", fg: "transparent", dot: "transparent" },

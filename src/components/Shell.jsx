@@ -1,7 +1,7 @@
 import React, { useState } from "react";
-import { Building2, Users, BarChart3, FileText, X, Menu, LogOut, CalendarCheck, CalendarDays, Wallet, CalendarHeart } from "lucide-react";
+import { Building2, Users, BarChart3, FileText, X, Menu, LogOut, CalendarCheck, CalendarDays, Wallet, CalendarHeart, PieChart } from "lucide-react";
 import { COLORS } from "../lib/constants";
-import { LogoMark } from "./ui";
+import { LogoMark, selectStyle } from "./ui";
 
 const NAV_ITEMS = [
   { id: "today", label: "Today", icon: Building2 },
@@ -10,11 +10,12 @@ const NAV_ITEMS = [
   { id: "leaveSummary", label: "Leave Summary", icon: CalendarDays },
   { id: "leaveBalances", label: "Leave Balances", icon: Wallet },
   { id: "reports", label: "Reports", icon: BarChart3 },
+  { id: "stats", label: "Attendance Stats", icon: PieChart },
   { id: "monthly", label: "Monthly Report", icon: FileText },
   { id: "holidays", label: "Public Holidays", icon: CalendarHeart },
 ];
 
-export default function Shell({ children, tab, setTab, saveState, account, onLogout }) {
+export default function Shell({ children, tab, setTab, saveState, account, onLogout, employeeFilter, setEmployeeFilter }) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
@@ -47,7 +48,7 @@ export default function Shell({ children, tab, setTab, saveState, account, onLog
       )}
 
       <main className="rv-main-pad" style={{ flex: 1, minWidth: 0, padding: "24px 24px 60px" }}>
-        <TopBar saveState={saveState} account={account} />
+        <TopBar saveState={saveState} account={account} employeeFilter={employeeFilter} setEmployeeFilter={setEmployeeFilter} />
         {children}
       </main>
     </div>
@@ -97,15 +98,30 @@ function SidebarInner({ tab, setTab, account, onLogout }) {
   );
 }
 
-function TopBar({ saveState, account }) {
+function TopBar({ saveState, account, employeeFilter, setEmployeeFilter }) {
   const showStatus = saveState === "saving" || saveState === "saved";
-  if (!showStatus) return null;
   return (
-    <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", marginBottom: 22, flexWrap: "wrap", gap: 10 }}>
-      <span className="rv-savestate" style={{ fontSize: 12.5, color: saveState === "saving" ? COLORS.muted : COLORS.green, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 6 }}>
-        <span className={saveState === "saving" ? "rv-save-dot rv-save-dot--pulsing" : "rv-save-dot"} />
-        {saveState === "saving" ? "Saving…" : "All changes saved"}
-      </span>
+    <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", marginBottom: 22, flexWrap: "wrap", gap: 14 }}>
+      {setEmployeeFilter && (
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: COLORS.muted, fontWeight: 600 }}>
+          Employees
+          <select
+            value={employeeFilter}
+            onChange={e => setEmployeeFilter(e.target.value)}
+            style={{ ...selectStyle, width: "auto", padding: "6px 10px", fontSize: 12.5 }}
+          >
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+            <option value="all">All</option>
+          </select>
+        </label>
+      )}
+      {showStatus && (
+        <span className="rv-savestate" style={{ fontSize: 12.5, color: saveState === "saving" ? COLORS.muted : COLORS.green, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <span className={saveState === "saving" ? "rv-save-dot rv-save-dot--pulsing" : "rv-save-dot"} />
+          {saveState === "saving" ? "Saving…" : "All changes saved"}
+        </span>
+      )}
     </div>
   );
 }

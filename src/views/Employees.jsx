@@ -33,10 +33,9 @@ function daysSince(dateStr, now) {
   return Math.floor((today - d) / 86400000);
 }
 
-export default function EmployeesView({ employees, setEmployees, accounts, refreshAccounts, attendance }) {
+export default function EmployeesView({ employees, setEmployees, accounts, refreshAccounts, attendance, filter, setFilter }) {
   const [editing, setEditing] = useState(null);
   const [credsFor, setCredsFor] = useState(null);
-  const [filter, setFilter] = useState("active"); // active | inactive | all
   const isOpen = editing !== null;
 
   // Auto Active/Inactive sync — runs whenever attendance data changes.
@@ -97,17 +96,11 @@ export default function EmployeesView({ employees, setEmployees, accounts, refre
     <div className="rv-anim-fadein">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, gap: 10, flexWrap: "wrap" }}>
         <h1 style={{ fontSize: 26, fontWeight: 800, margin: 0 }}>Employees</h1>
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <select value={filter} onChange={e => setFilter(e.target.value)} style={{ ...inputStyle, width: "auto" }}>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-            <option value="all">All</option>
-          </select>
-          <button onClick={() => setEditing({})} style={primaryBtn}><Plus size={16} /> Add employee</button>
-        </div>
+        <button onClick={() => setEditing({})} style={primaryBtn}><Plus size={16} /> Add employee</button>
       </div>
       <p style={{ color: COLORS.muted, fontSize: 12.5, margin: "0 0 18px" }}>
-        Active/Inactive updates automatically: {AUTO_INACTIVE_DAYS}+ days with no check-in, WFH check-in, leave, or
+        Use the Employees filter in the top bar to switch between Active, Inactive, and All — it applies here and across every other tab.
+        Active/Inactive also updates automatically: {AUTO_INACTIVE_DAYS}+ days with no check-in, WFH check-in, leave, or
         alternate day moves someone to Inactive; any of those resuming moves them back to Active.
       </p>
 

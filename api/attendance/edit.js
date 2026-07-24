@@ -11,6 +11,10 @@
 //     second_check_in: "2026-07-13T15:30:00.000Z" | null,  // split-shift 2nd session
 //     second_check_out: "2026-07-13T18:30:00.000Z" | null,
 //     notes: "Forgot to check out, corrected by HR", // optional
+//     manual_status: "present" | "half" | "wfh" | "short_leave" | "holiday"
+//       | "absent" | null,  // optional — HR override from Monthly Report's
+//       Status-Edit dropdown; null/"" clears it and goes back to the
+//       auto-calculated status
 //     edited_by: "tehzeeb zahra"    // required — who made the change, for the audit trail
 //   }
 //
@@ -69,6 +73,26 @@ function isValidDateStr(s) {
   return typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
 }
 
+// Same set of values the Status-Edit dropdown offers (see
+// lib/constants.js MANUAL_STATUS_OPTIONS on the client) — checked here too
+// so a malformed or unexpected value can't get written to the column.
+const VALID_MANUAL_STATUSES = [
+  "present", "half", "wfh", "short_leave", "holiday", "absent",
+];
+
+// Parses manual_status. Returns { ok, value, provided } — `provided` is
+// false when the key was omitted entirely (leave the column alone); null
+// or "" means "clear the override" (go back to auto-calculated status).
+function parseManualStatusField(body) {
+  if (!("manual_status" in body)) return { ok: true, value: undefined, provided: false };
+  const raw = body.manual_status;
+  if (raw === null || raw === "") return { ok: true, value: null, provided: true };
+  if (typeof raw !== "string" || !VALID_MANUAL_STATUSES.includes(raw)) {
+    return { ok: false, value: null, provided: true };
+  }
+  return { ok: true, value: raw, provided: true };
+}
+
 // Parses one punch field. Returns { ok, date, provided } — `provided` is
 // false when the key was omitted from the request body entirely (meaning
 // "leave this field alone"), as opposed to explicitly sent as null.
@@ -114,6 +138,7 @@ export default async function handler(req, res) {
     const checkOut = parsePunchField(body, "check_out");
     const secondCheckIn = parsePunchField(body, "second_check_in");
     const secondCheckOut = parsePunchField(body, "second_check_out");
+    const manualStatus = parseManualStatusField(body);
 
     for (const [name, f] of [
       ["check_in", checkIn], ["check_out", checkOut],
@@ -123,6 +148,10 @@ export default async function handler(req, res) {
         res.status(400).json({ error: `${name} is not a valid date/time` });
         return;
       }
+    }
+    if (!manualStatus.ok) {
+      res.status(400).json({ error: `manual_status must be one of: ${VALID_MANUAL_STATUSES.join(", ")}, or null` });
+      return;
     }
 
     if (checkIn.date && checkOut.date && checkOut.date.getTime() <= checkIn.date.getTime()) {
@@ -153,6 +182,7 @@ export default async function handler(req, res) {
     if (secondCheckIn.provided) payload.second_check_in = secondCheckIn.date ? secondCheckIn.date.toISOString() : null;
     if (secondCheckOut.provided) payload.second_check_out = secondCheckOut.date ? secondCheckOut.date.toISOString() : null;
     if (typeof notes === "string") payload.notes = notes;
+    if (manualStatus.provided) payload.manual_status = manualStatus.value;
 
     const existing = await getAttendanceRow(employee_id, date);
 

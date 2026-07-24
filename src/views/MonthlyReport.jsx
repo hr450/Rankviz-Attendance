@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Coffee, Repeat, Home, Pencil, X, CalendarHeart } from "lucide-react";
-import { COLORS } from "../lib/constants";
+import { COLORS, MANUAL_STATUS_OPTIONS } from "../lib/constants";
 import { computeStatus, fmtTime, fmtHrs, monthKey, daysInMonth, todayStr } from "../lib/utils";
 import { StatusPill, StatCard, selectStyle, th, td } from "../components/ui";
 import { updateEmployeeShift } from "../lib/db";
@@ -20,6 +20,8 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
   const [empId, setEmpId] = useState(employees[0]?.id || "");
   const [ym, setYm] = useState(monthKey(todayStr(now)));
   const [editingDate, setEditingDate] = useState(null); // date string of the row currently open in the edit modal
+  const [statusSavingDate, setStatusSavingDate] = useState(null); // date whose Status-Edit dropdown is mid-save
+  const [statusError, setStatusError] = useState(null); // { date, message }
 
   const holidayByDate = useMemo(() => {
     const map = {};
@@ -72,6 +74,21 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
     const attendancePct = markedDays ? Math.round(((present + half + wfh) / markedDays) * 100) : null;
     return { present, late, half, noCheckout, wfh, leave, absent, avgHours: workedDays ? totalHours / workedDays : 0, attendancePct };
   }, [rows]);
+
+  // Status-Edit dropdown — lets HR override the auto-calculated status for
+  // a single day. Sends manual_status through the same /api/attendance/edit
+  // path as the correction modal; "" (Auto) clears the override so
+  // computeStatus() goes back to calculating it from check-in/check-out.
+  const handleStatusChange = async (date, value) => {
+    setStatusError(null);
+    setStatusSavingDate(date);
+    try {
+      await onSaveEdit(emp.id, date, { manual_status: value || null });
+    } catch (e) {
+      setStatusError({ date, message: e.message || "Couldn't save that status." });
+    }
+    setStatusSavingDate(null);
+  };
 
   if (!emp) return <p style={{ color: COLORS.muted }}>No employees yet — add some in the Employees tab first.</p>;
 
@@ -130,7 +147,7 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
           <thead>
             <tr style={{ color: COLORS.muted, fontSize: 12.5, textAlign: "left" }}>
               <th style={th}>Date</th><th style={th}>Status</th><th style={th}>Check-in</th>
-              <th style={th}>Check-out</th><th style={th}>WFH in</th><th style={th}>WFH out</th><th style={th}>Hours</th><th style={th}>Notes</th><th style={th}></th>
+              <th style={th}>Check-out</th><th style={th}>WFH in</th><th style={th}>WFH out</th><th style={th}>Hours</th><th style={th}>Notes</th><th style={th}>Status-Edit</th><th style={th}></th>
             </tr>
           </thead>
           <tbody>
@@ -187,6 +204,21 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
                       </span>
                     )}
                   </td>
+                  <td style={td}>
+                    <select
+                      value={r.rec?.manualStatus || ""}
+                      onChange={e => handleStatusChange(r.date, e.target.value)}
+                      disabled={statusSavingDate === r.date}
+                      style={{ ...selectStyle, minWidth: 118, opacity: statusSavingDate === r.date ? 0.6 : 1 }}
+                    >
+                      {MANUAL_STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                    {statusError?.date === r.date && (
+                      <div style={{ color: COLORS.red, fontSize: 11, fontWeight: 600, marginTop: 4, maxWidth: 140 }}>
+                        {statusError.message}
+                      </div>
+                    )}
+                  </td>
                   <td style={{ ...td, textAlign: "right" }}>
                     <button
                       onClick={() => setEditingDate(r.date)}
@@ -204,7 +236,7 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
               );
             })}
             {rows.length === 0 && (
-              <tr><td colSpan={9} style={{ ...td, color: COLORS.muted, textAlign: "center", padding: "26px 0" }}>No records this month yet.</td></tr>
+              <tr><td colSpan={10} style={{ ...td, color: COLORS.muted, textAlign: "center", padding: "26px 0" }}>No records this month yet.</td></tr>
             )}
           </tbody>
         </table>
