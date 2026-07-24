@@ -55,6 +55,24 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
   const alternates = rows.filter(r => r.rec?.alternateDay);
   const noCheckouts = rows.filter(r => (r.rec?.checkIn && !r.rec?.checkOut) || (r.rec?.wfhCheckIn && !r.rec?.wfhCheckOut));
 
+  const stats = useMemo(() => {
+    let present = 0, late = 0, half = 0, noCheckout = 0, wfh = 0, leave = 0, absent = 0, totalHours = 0, workedDays = 0;
+    rows.forEach(r => {
+      if (r.status.tone === "present") present++;
+      else if (r.status.tone === "late") { present++; late++; }
+      else if (r.status.tone === "half") half++;
+      else if (r.status.tone === "no_checkout") noCheckout++;
+      else if (r.status.tone === "wfh") wfh++;
+      else if (r.status.tone === "leave") leave++;
+      else if (r.status.tone === "absent") absent++;
+      const inT = r.rec?.checkIn || r.rec?.wfhCheckIn, outT = r.rec?.checkOut || r.rec?.wfhCheckOut;
+      if (inT && outT) { totalHours += (new Date(outT) - new Date(inT)) / 3600000; workedDays++; }
+    });
+    const markedDays = present + half + noCheckout + wfh + absent;
+    const attendancePct = markedDays ? Math.round(((present + half + wfh) / markedDays) * 100) : null;
+    return { present, late, half, noCheckout, wfh, leave, absent, avgHours: workedDays ? totalHours / workedDays : 0, attendancePct };
+  }, [rows]);
+
   if (!emp) return <p style={{ color: COLORS.muted }}>No employees yet — add some in the Employees tab first.</p>;
 
   return (
@@ -75,7 +93,14 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 14, marginBottom: 22 }}>
-        <StatCard label="Leaves taken" value={leaves.length} tone="leave" />
+        <StatCard label="Present" value={stats.present} tone="present" />
+        <StatCard label="Late" value={stats.late} tone="half" />
+        <StatCard label="Half day" value={stats.half} tone="half" />
+        <StatCard label="WFH" value={stats.wfh} tone="present" />
+        <StatCard label="Leave" value={stats.leave} tone="leave" />
+        <StatCard label="Absent" value={stats.absent} tone="absent" />
+        <StatCard label="Attendance" value={stats.attendancePct != null ? `${stats.attendancePct}%` : "—"} tone="present" />
+        <StatCard label="Avg hrs/day" value={stats.avgHours ? stats.avgHours.toFixed(1) + "h" : "—"} tone="pending" />
         <StatCard label="Alternate days worked" value={alternates.length} tone="present" />
         <StatCard label="Missing checkouts" value={noCheckouts.length} tone="half" />
         <StatCard label="Days recorded" value={rows.filter(r => r.rec).length} tone="pending" />
