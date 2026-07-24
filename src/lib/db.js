@@ -153,6 +153,15 @@ export function logout() {
   setToken(null);
 }
 
+// Kept only so existing imports (e.g. App.jsx) don't break the build.
+// Real account data is no longer fetched with the anon key — this
+// returns empty. If the app actually needs to list accounts somewhere,
+// that should become its own admin-only server route, same pattern as
+// employees.js.
+export async function loadAccounts() {
+  return [];
+}
+
 // TODO: upsertEmployeeCredentials still writes directly with the anon key —
 // migrate this to a server route (with bcrypt hashing) before RLS lockdown.
 export async function upsertEmployeeCredentials({ employeeId, name, username, password }) {
