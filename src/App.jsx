@@ -53,7 +53,9 @@ export default function App() {
 
   useEffect(() => {
     if (!SUPABASE_CONFIGURED) { setLoading(false); return; }
+    if (!session) { setLoading(false); return; } // don't fetch protected data before login
     (async () => {
+      setLoading(true);
       try {
         const emps = await loadEmployees();
         const att = await loadAttendance();
@@ -76,7 +78,7 @@ export default function App() {
       }
       setLoading(false);
     })();
-  }, []);
+  }, [session]);
 
   const refreshAccounts = useCallback(async () => {
     const accts = await loadAccounts();
@@ -244,6 +246,10 @@ export default function App() {
     return result;
   }, [punch, employees]);
 
+  useEffect(() => {
+    if (stage === "waitingForData" && !loading) setStage("app");
+  }, [stage, loading]);
+
   const handleLogin = (acct) => {
     setSession(acct);
     setTab("today");
@@ -262,7 +268,18 @@ export default function App() {
       <Splash
         holdMs={150}
         subtitle={session.role === "admin" ? `Welcome back, ${session.name?.split(" ")[0] || "there"}` : `Hi, ${session.name?.split(" ")[0] || "there"} — have a great day`}
-        onDone={() => setStage("app")}
+        onDone={() => setStage(loading ? "waitingForData" : "app")}
+      />
+    );
+  }
+  if (stage === "waitingForData") {
+    // Splash's minimum hold time passed, but data is still loading — keep
+    // showing the splash a moment longer rather than flashing an empty app.
+    return (
+      <Splash
+        holdMs={0}
+        subtitle={session.role === "admin" ? `Welcome back, ${session.name?.split(" ")[0] || "there"}` : `Hi, ${session.name?.split(" ")[0] || "there"} — have a great day`}
+        onDone={() => {}}
       />
     );
   }
