@@ -1,6 +1,22 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./constants";
 import { uid, todayStr } from "./utils";
 
+/* ============================================================
+   NOTE ON THIS FILE
+   ------------------------------------------------------------
+   Auth, employees, and attendance now go through our own server
+   routes (/api/...) instead of calling Supabase directly from the
+   browser. Those routes use the service_role key, which never
+   ships to the client, and check the caller's session token before
+   returning or changing anything.
+
+   Everything below this note (leave types/requests/balances/log,
+   public holidays) still talks to Supabase directly with the anon
+   key, same as before. THIS IS THE NEXT THING TO MIGRATE before
+   the RLS lockdown SQL is run, or those features will break/stay
+   open. Same pattern as employees.js / attendance.js above.
+   ============================================================ */
+
 export async function supaFetch(path, options = {}) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
     ...options,
@@ -19,9 +35,6 @@ export async function supaFetch(path, options = {}) {
   return res.json().catch(() => null);
 }
 
-// PostgREST caps a single request at ~1000 rows by default. Tables that can
-// grow past that (attendance, leave_log, etc.) need to be paged through with
-// Range headers, or rows beyond the cap silently never reach the app.
 export async function supaFetchAll(path, pageSize = 1000) {
   let all = [];
   let from = 0;
@@ -41,51 +54,52 @@ export async function supaFetchAll(path, pageSize = 1000) {
     }
     const page = await res.json().catch(() => []);
     all = all.concat(page || []);
-    if (!page || page.length < pageSize) break; // last page reached
+    if (!page || page.length < pageSize) break;
     from += pageSize;
   }
   return all;
 }
 
+/* ---------------- Session token helpers ---------------- */
+// The token from /api/auth/login is kept in memory + localStorage so it
+// survives a page refresh. It is a signed session token, NOT a password —
+// safe to store client-side, same as any other login session.
+const TOKEN_KEY = "rv_session_token";
+
+export function getToken() {
+  try { return localStorage.getItem(TOKEN_KEY); } catch { return null; }
+}
+export function setToken(token) {
+  try { token ? localStorage.setItem(TOKEN_KEY, token) : localStorage.removeItem(TOKEN_KEY); } catch {}
+}
+
+async function apiFetch(path, options = {}) {
+  const token = getToken();
+  const res = await fetch(path, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options.headers || {}),
+    },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  return data;
+}
+
 /* ---------------- Employees ---------------- */
-function empToRow(e) {
-  return {
-    id: e.id, name: e.name, department: e.department,
-    employment_type: e.employmentType, shift_start: e.shiftStart, shift_end: e.shiftEnd,
-    zk_user_id: e.zkUserId || null, active: e.active !== false,
-  };
-}
-function rowToEmp(r) {
-  return {
-    id: r.id, name: r.name, department: r.department,
-    employmentType: r.employment_type, shiftStart: r.shift_start, shiftEnd: r.shift_end,
-    zkUserId: r.zk_user_id || "", active: r.active !== false,
-  };
-}
 export async function loadEmployees() {
-  const rows = await supaFetch("employees?select=*&order=name.asc");
-  return (rows || []).map(rowToEmp);
+  return apiFetch("/api/employees", { method: "GET" });
 }
 export async function saveEmployees(next, prev) {
-  const nextIds = new Set(next.map(e => e.id));
-  const removed = prev.filter(e => !nextIds.has(e.id));
-  for (const r of removed) {
-    await supaFetch(`employees?id=eq.${encodeURIComponent(r.id)}`, { method: "DELETE" });
-  }
-  if (next.length) {
-    await supaFetch("employees?on_conflict=id", {
-      method: "POST",
-      headers: { Prefer: "resolution=merge-duplicates" },
-      body: JSON.stringify(next.map(empToRow)),
-    });
-  }
+  await apiFetch("/api/employees", { method: "POST", body: JSON.stringify({ next, prev }) });
 }
 
 // Used by Monthly Report's "Change shift" option in the correction modal.
-// Updates the employee's permanent shift start/end going forward — there's
-// no per-day shift override column, so this changes the standing shift,
-// not just the one day being corrected. The modal makes that explicit.
 export async function updateEmployeeShift(employeeId, shiftStart, shiftEnd) {
+  // Still direct — TODO: move to a server route alongside employees.js
+  // before the RLS lockdown SQL runs.
   await supaFetch(`employees?id=eq.${encodeURIComponent(employeeId)}`, {
     method: "PATCH",
     body: JSON.stringify({ shift_start: shiftStart, shift_end: shiftEnd }),
@@ -94,44 +108,13 @@ export async function updateEmployeeShift(employeeId, shiftStart, shiftEnd) {
 
 /* ---------------- Attendance ---------------- */
 export async function loadAttendance() {
-  const rows = await supaFetchAll("attendance?select=*");
-  const map = {};
-  (rows || []).forEach(r => {
-    map[`${r.employee_id}|${r.date}`] = {
-      checkIn: r.check_in, checkOut: r.check_out, type: r.type,
-      wfhCheckIn: r.wfh_check_in, wfhCheckOut: r.wfh_check_out,
-      // Second session — split-shift employees who work a day shift and
-      // then come back for a few extra hours at night.
-      secondCheckIn: r.second_check_in, secondCheckOut: r.second_check_out,
-      alternateDay: !!r.alternate_day, leaveReason: r.leave_reason || "",
-      notes: r.notes || "", manuallyEdited: !!r.manually_edited,
-      editedBy: r.edited_by || null, editedAt: r.edited_at || null,
-    };
-  });
-  return map;
+  return apiFetch("/api/attendance", { method: "GET" });
 }
 export async function saveAttendanceRecord(employeeId, date, rec, source) {
-  await supaFetch("attendance?on_conflict=employee_id,date", {
-    method: "POST",
-    headers: { Prefer: "resolution=merge-duplicates" },
-    body: JSON.stringify([{
-      employee_id: employeeId, date,
-      check_in: rec.checkIn || null, check_out: rec.checkOut || null,
-      type: rec.type || "office", source: source || "web",
-      wfh_check_in: rec.wfhCheckIn || null, wfh_check_out: rec.wfhCheckOut || null,
-      second_check_in: rec.secondCheckIn || null, second_check_out: rec.secondCheckOut || null,
-      alternate_day: !!rec.alternateDay, leave_reason: rec.leaveReason || null,
-    }]),
-  });
+  await apiFetch("/api/attendance", { method: "POST", body: JSON.stringify({ employeeId, date, rec, source }) });
 }
 
-/* ---------------- Web punch (IP-restricted office check-in/out) ----------------
-   Office actions (in / out / second_in / second_out) are verified server-side
-   against the office network's IP in api/attendance/punch.js — the browser's
-   own IP is never trusted for this. WFH / leave / alternate skip that check
-   entirely since they're not tied to being physically in the office.
-   Throws on rejection (e.g. { code: "OFFICE_IP_REQUIRED" }) so callers can
-   show the employee a clear reason instead of silently failing. */
+/* ---------------- Web punch (IP-restricted office check-in/out) ---------------- */
 export async function webPunch(employeeId, action, meta) {
   const res = await fetch("/api/attendance/punch", {
     method: "POST",
@@ -144,31 +127,34 @@ export async function webPunch(employeeId, action, meta) {
     err.code = data.code;
     throw err;
   }
-  return data.record; // camelCase attendance fields, ready to merge into state
+  return data.record;
 }
 
 /* ---------------- User accounts (admin / employee login) ---------------- */
-function rowToAccount(r) {
-  return { id: r.id, username: r.username, role: r.role, employeeId: r.employee_id || null, name: r.name || "" };
+export async function verifyLogin(username, password) {
+  try {
+    const data = await apiFetch("/api/auth/login", { method: "POST", body: JSON.stringify({ username, password }) });
+    setToken(data.token);
+    return data.user;
+  } catch {
+    return null; // wrong credentials, or request failed — treat both as "login failed"
+  }
 }
-export async function loadAccounts() {
-  const rows = await supaFetch("app_users?select=id,username,role,employee_id,name");
-  return (rows || []).map(rowToAccount);
-}
-export async function findAccountByUsername(username) {
-  const rows = await supaFetch(`app_users?username=eq.${encodeURIComponent(username.trim().toLowerCase())}&select=*`);
-  return (rows && rows[0]) || null;
-}
+
 export async function createAdminAccount({ name, username, password }) {
-  const existing = await findAccountByUsername(username);
-  if (existing) throw new Error("That username/email is already registered.");
-  const row = {
-    id: uid("usr"), username: username.trim().toLowerCase(), password, role: "admin",
-    name, employee_id: null, created_at: new Date().toISOString(),
-  };
-  await supaFetch("app_users", { method: "POST", body: JSON.stringify([row]) });
-  return rowToAccount(row);
+  // Requires the CALLER to already be logged in as admin — enforced server-side.
+  // There's no public sign-up path anymore; this is only reachable from an
+  // "Add HR Admin" screen inside the dashboard, shown to logged-in admins.
+  const data = await apiFetch("/api/auth/create-admin", { method: "POST", body: JSON.stringify({ name, username, password }) });
+  return data.user;
 }
+
+export function logout() {
+  setToken(null);
+}
+
+// TODO: upsertEmployeeCredentials still writes directly with the anon key —
+// migrate this to a server route (with bcrypt hashing) before RLS lockdown.
 export async function upsertEmployeeCredentials({ employeeId, name, username, password }) {
   const rows = await supaFetch(`app_users?employee_id=eq.${encodeURIComponent(employeeId)}&select=id`);
   const existingId = rows && rows[0] && rows[0].id;
@@ -182,12 +168,7 @@ export async function upsertEmployeeCredentials({ employeeId, name, username, pa
     headers: { Prefer: "resolution=merge-duplicates" },
     body: JSON.stringify([row]),
   });
-  return rowToAccount(row);
-}
-export async function verifyLogin(username, password) {
-  const row = await findAccountByUsername(username);
-  if (!row || row.password !== password) return null;
-  return rowToAccount(row);
+  return { id: row.id, username: row.username, role: row.role, employeeId: row.employee_id, name: row.name };
 }
 
 /* ---------------- Leave types (HR-managed) ---------------- */
@@ -271,7 +252,6 @@ export async function saveLeaveBalance(employeeId, balance) {
 
 /* ---------------- Leave log (manual monthly leave policy grid) ---------------- */
 export async function loadLeaveLog(ym) {
-  // ym: "YYYY-MM" — loads only that month's rows to keep payloads small.
   const rows = await supaFetchAll(
     `leave_log?select=employee_id,date,leave_type&date=gte.${ym}-01&date=lte.${ym}-31`
   );
@@ -295,10 +275,6 @@ export async function saveLeaveLogEntry(employeeId, date, leaveType) {
 }
 
 /* ---------------- Public holidays (manually maintained by HR/admin) ---------------- */
-// Point 2: when a date on this list falls in a report/log, the holiday
-// name is shown alongside that day's Notes — automatically, without
-// touching the attendance row's actual `notes` field, so it never
-// silently overwrites something HR typed in by hand.
 export async function loadPublicHolidays() {
   const rows = await supaFetch("public_holidays?select=*&order=date.asc");
   return (rows || []).map(r => ({ id: r.id, date: r.date, name: r.name }));
@@ -316,9 +292,6 @@ export async function deletePublicHoliday(id) {
   await supaFetch(`public_holidays?id=eq.${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
-// No seed/demo employees — the Employees list starts empty. Add real staff
-// via the Employees tab, or (once wired up) they'll come in automatically
-// from the ZKTeco device sync.
 export const SEED_EMPLOYEES = [];
 
 export function recKey(empId, date) {

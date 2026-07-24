@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
-import { LogIn, UserPlus, ShieldCheck, UserCircle2, Loader2, AlertCircle } from "lucide-react";
+import { LogIn, ShieldCheck, UserCircle2, Loader2, AlertCircle } from "lucide-react";
 import { LogoMark } from "./ui";
-import { verifyLogin, createAdminAccount } from "../lib/db";
+import { verifyLogin } from "../lib/db";
 
 /* Same set of "trust" words used in the animated design's hidden-word
    spotlight layer — purely decorative, revealed near the cursor. */
@@ -48,8 +48,7 @@ function useParticles(count = 18) {
 
 export default function Login({ onLogin }) {
   const [mode, setMode] = useState("admin"); // admin | employee
-  const [adminTab, setAdminTab] = useState("login"); // login | signup
-  const [form, setForm] = useState({ name: "", username: "", password: "" });
+  const [form, setForm] = useState({ username: "", password: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -105,24 +104,7 @@ export default function Login({ onLogin }) {
     setBusy(false);
   };
 
-  const doSignup = async () => {
-    setError(""); setBusy(true);
-    try {
-      if (!form.name.trim()) throw new Error("Enter your full name.");
-      if (!form.username.trim()) throw new Error("Enter a username or email.");
-      if (form.password.length < 4) throw new Error("Password should be at least 4 characters.");
-      const acct = await createAdminAccount(form);
-      onLogin(acct);
-    } catch (e) {
-      setError(e.message || "Couldn't create the account.");
-    }
-    setBusy(false);
-  };
-
-  const submit = () => {
-    if (mode === "admin" && adminTab === "signup") doSignup();
-    else doLogin();
-  };
+  const submit = () => doLogin();
   /* ---- End unchanged auth logic ---- */
 
   return (
@@ -171,7 +153,7 @@ export default function Login({ onLogin }) {
           </div>
 
           <div className="llg-welcome">
-            <h1>{mode === "admin" ? (adminTab === "signup" ? "Create HR account" : "Welcome back") : "Employee sign in"}</h1>
+            <h1>{mode === "admin" ? "Welcome back" : "Employee sign in"}</h1>
             <p>
               {mode === "admin"
                 ? "Sign in to manage attendance, employees and reports."
@@ -179,24 +161,7 @@ export default function Login({ onLogin }) {
             </p>
           </div>
 
-          {mode === "admin" && (
-            <div className={`llg-auth-tabs${adminTab === "signup" ? " signup" : ""}`}>
-              <button type="button" className={adminTab === "login" ? "active" : ""} onClick={() => { setAdminTab("login"); setError(""); }}>Log In</button>
-              <button type="button" className={adminTab === "signup" ? "active" : ""} onClick={() => { setAdminTab("signup"); setError(""); }}>Sign Up</button>
-              <div className="llg-auth-underline" />
-            </div>
-          )}
-
-          {mode === "admin" && adminTab === "signup" && (
-            <div className="llg-field">
-              <label>Full name</label>
-              <div className="llg-input-wrap">
-                <input value={form.name} onChange={set("name")} placeholder="e.g. Ananya Rao" />
-              </div>
-            </div>
-          )}
-
-          <div className="llg-field">
+          <div className="llg-field" style={{ marginTop: 22 }}>
             <label>{mode === "employee" ? "Username" : "Username or email"}</label>
             <div className="llg-input-wrap">
               <input value={form.username} onChange={set("username")}
@@ -216,8 +181,8 @@ export default function Login({ onLogin }) {
           )}
 
           <button type="button" onClick={submit} disabled={busy} className="llg-login-btn" style={{ opacity: busy ? 0.75 : 1 }}>
-            {busy ? <Loader2 size={16} className="rv-spin" /> : (adminTab === "signup" && mode === "admin" ? <UserPlus size={16} /> : <LogIn size={16} />)}
-            {busy ? "Please wait…" : (mode === "admin" && adminTab === "signup" ? "Create account" : "Log in")}
+            {busy ? <Loader2 size={16} className="rv-spin" /> : <LogIn size={16} />}
+            {busy ? "Please wait…" : "Log in"}
           </button>
         </div>
 
@@ -343,12 +308,6 @@ const CSS = `
 .llg-welcome{margin-top:22px;}
 .llg-welcome h1{font-size:22px; font-weight:800; letter-spacing:-0.01em;}
 .llg-welcome p{font-size:13.5px; color:#6E85A8; margin-top:5px;}
-
-.llg-auth-tabs{display:flex; gap:22px; margin-top:20px; border-bottom:1px solid #E7EEFA; position:relative;}
-.llg-auth-tabs button{ background:none; border:none; cursor:pointer; font-size:14px; font-weight:700; color:#8CA0C2; padding:0 0 10px; position:relative; }
-.llg-auth-tabs button.active{color:var(--royal);}
-.llg-auth-underline{position:absolute; bottom:-1px; left:0; height:2px; width:52px; background:var(--royal); transition:transform 0.3s cubic-bezier(.2,.8,.2,1);}
-.llg-auth-tabs.signup .llg-auth-underline{ transform:translateX(76px); width:66px; }
 
 .llg-field{margin-top:18px;}
 .llg-field label{font-size:12.5px; font-weight:700; color:#3C5478; display:block; margin-bottom:7px;}
