@@ -68,15 +68,22 @@ export default function App() {
     (async () => {
       setLoading(true);
       try {
-        const emps = await loadEmployees();
-        const att = await loadAttendance();
-        const accts = await loadAccounts();
+        // These 7 calls don't depend on each other's results, so fetch them
+        // all in parallel instead of one-after-another — this alone was
+        // stretching the initial blank-screen wait to roughly the SUM of
+        // every call's latency (~5-6s). In parallel it's bounded by the
+        // single slowest call instead.
+        const [emps, att, accts, types, requests, balances, holidays] = await Promise.all([
+          loadEmployees(),
+          loadAttendance(),
+          loadAccounts(),
+          loadLeaveTypes(),
+          loadLeaveRequests(),
+          loadLeaveBalances(),
+          loadPublicHolidays(),
+        ]);
         const byEmp = {};
         accts.forEach(a => { if (a.employeeId) byEmp[a.employeeId] = a; });
-        const types = await loadLeaveTypes();
-        const requests = await loadLeaveRequests();
-        const balances = await loadLeaveBalances();
-        const holidays = await loadPublicHolidays();
         setEmployees(emps);
         setAttendance(att);
         setAccountsByEmp(byEmp);
