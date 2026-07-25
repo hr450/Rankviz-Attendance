@@ -41,16 +41,23 @@ export default function ReportsView({ employees, attendance, now }) {
     }
     const markedDays = present + half + noCheckout + wfh + absent;
     const attendancePct = markedDays ? Math.round(((present + half + wfh) / markedDays) * 100) : null;
-    return { emp, present, late, half, noCheckout, wfh, leave, absent, alternateDays, avgHours: workedDays ? totalHours / workedDays : 0, attendancePct };
+    // Coerce in case any per-day counter above ever ends up non-numeric —
+    // keeps this row (and therefore the team-wide total below) from ever
+    // silently turning into NaN.
+    const avgHours = workedDays && Number.isFinite(totalHours / workedDays) ? totalHours / workedDays : 0;
+    return { emp, present, late, half, noCheckout, wfh, leave, absent, alternateDays, avgHours, attendancePct };
   });
 
+  const num = (v) => (Number.isFinite(v) ? v : 0);
   const teamTotals = summary.reduce((acc, s) => {
-    acc.present += s.present; acc.absent += s.absent; acc.leave += s.leave;
-    acc.marked += s.present + s.half + s.wfh + s.absent;
-    acc.attended += s.present + s.half + s.wfh;
+    acc.present += num(s.present); acc.absent += num(s.absent); acc.leave += num(s.leave);
+    acc.marked += num(s.present) + num(s.half) + num(s.wfh) + num(s.absent);
+    acc.attended += num(s.present) + num(s.half) + num(s.wfh);
     return acc;
   }, { present: 0, absent: 0, leave: 0, marked: 0, attended: 0 });
-  const teamAvgAttendance = teamTotals.marked > 0 ? Math.round((teamTotals.attended / teamTotals.marked) * 100) : 0;
+  const teamAvgAttendance = teamTotals.marked > 0 && Number.isFinite(teamTotals.attended / teamTotals.marked)
+    ? Math.round((teamTotals.attended / teamTotals.marked) * 100)
+    : 0;
 
   const visibleSummary = useMemo(() => {
     let list = summary.filter(s => s.emp.name.toLowerCase().includes(search.trim().toLowerCase()));
