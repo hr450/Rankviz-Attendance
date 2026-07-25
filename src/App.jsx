@@ -151,50 +151,34 @@ export default function App() {
   }, []);
 
   /* Manual HR/admin correction — used by MonthlyReport's per-row Edit
-     modal AND its Status-Edit dropdown. Hits the existing /api/attendance/edit
-     endpoint (sets manually_edited/edited_by/edited_at server-side); this
-     just wires a UI to it and folds the corrected fields back into local
-     state. Fields not present in `patch` are left untouched.
-     NOTE: the dropdown sends { manual_status } — /api/attendance/edit.js
-     needs a manual_status column (attendance table) and to pass it through
-     on read/write for this to actually persist; it's not in the uploaded
-     files so it isn't edited here. */
+     modal AND its Status-Edit dropdown. Goes through /api/attendance (POST),
+     same route as everything else in db.js — that route already does a
+     read-merge-write against Supabase server-side (see attendance.js), so
+     sending just the changed fields in `patch` (e.g. { manualStatus }) is
+     safe and never clobbers untouched columns.
+     Previously this hit a separate /api/attendance/edit route that didn't
+     persist manual_status at all — saves looked successful (no error) but
+     never actually wrote it, so the dropdown silently reverted to "Auto". */
   const saveManualEdit = useCallback(async (employeeId, date, patch) => {
     setSaveState("saving");
-    const res = await fetch("/api/attendance/edit", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        employee_id: employeeId,
-        date,
-        edited_by: session?.name || session?.username || "HR",
-        ...patch,
-      }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setSaveState("error");
-      throw new Error(data.error || "Couldn't save that correction.");
-    }
-    const row = data.record || {};
     const key = recKey(employeeId, date);
-    setAttendance(prev => ({
-      ...prev,
-      [key]: {
-        ...prev[key],
-        ...("check_in" in row ? { checkIn: row.check_in } : {}),
-        ...("check_out" in row ? { checkOut: row.check_out } : {}),
-        ...("second_check_in" in row ? { secondCheckIn: row.second_check_in } : {}),
-        ...("second_check_out" in row ? { secondCheckOut: row.second_check_out } : {}),
-        ...("notes" in row ? { notes: row.notes || "" } : {}),
-        ...("manual_status" in row ? { manualStatus: row.manual_status || null } : {}),
-        manuallyEdited: true,
-        editedBy: row.edited_by || session?.name || session?.username || "HR",
-        editedAt: row.edited_at || new Date().toISOString(),
-      },
-    }));
-    setSaveState("saved");
-    return row;
+    try {
+      await saveAttendanceRecord(employeeId, date, patch, "manual");
+      setAttendance(prev => ({
+        ...prev,
+        [key]: {
+          ...prev[key],
+          ...patch,
+          manuallyEdited: true,
+          editedBy: session?.name || session?.username || "HR",
+          editedAt: new Date().toISOString(),
+        },
+      }));
+      setSaveState("saved");
+    } catch (e) {
+      setSaveState("error");
+      throw new Error(e.message || "Couldn't save that correction.");
+    }
   }, [session]);
 
   const addHoliday = useCallback(async (date, name) => {
