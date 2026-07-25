@@ -44,22 +44,30 @@ function DashboardStyles() {
       .rv-stagger-3 { animation-delay: .14s; }
       .rv-stagger-4 { animation-delay: .2s; }
       .rv-greeting-badge.rv-live { animation: rvPulseRing 2.4s ease-in-out infinite; }
-      .rv-cta2 { transition: transform .15s ease, box-shadow .15s ease; }
+      .rv-cta2 { position: relative; overflow: hidden; transition: transform .15s ease, box-shadow .15s ease; }
+      .rv-cta2::before { content: ""; position: absolute; inset: 0 0 50% 0; background: linear-gradient(180deg, rgba(255,255,255,0.22), rgba(255,255,255,0)); pointer-events: none; }
       .rv-cta2:not(:disabled):hover { transform: translateY(-3px); }
       .rv-cta2:not(:disabled):active { transform: translateY(0) scale(0.98); }
       .rv-row { transition: background .15s ease; }
       .rv-row:hover { background: #F5F7FC; }
-      .rv-sidebar-item { transition: background .15s ease, color .15s ease; }
-      .rv-sidebar-item:not(.rv-active):hover { background: rgba(255,255,255,0.08) !important; color: #fff; }
+      .rv-sidebar-item { transition: background .15s ease, color .15s ease, box-shadow .15s ease; }
+      .rv-sidebar-item:not(.rv-active):hover { background: rgba(255,255,255,0.08) !important; color: #fff; box-shadow: inset 0 1px 0 rgba(255,255,255,0.06); }
 
-      .rv-dark-card { background: ${DARK.card} !important; border: 1px solid ${DARK.cardBorder} !important; color: ${DARK.ink}; box-shadow: 0 6px 20px -12px rgba(15,27,51,0.15); }
+      .rv-dark-card { background: ${DARK.card} !important; border: 1px solid ${DARK.cardBorder} !important; color: ${DARK.ink}; box-shadow: 0 10px 28px -16px rgba(15,27,51,0.22), 0 2px 8px -4px rgba(15,27,51,0.08); transition: box-shadow .2s ease; }
       .rv-dark-row { border-bottom: 1px solid ${DARK.line} !important; }
       .rv-dark-row:hover { background: #F5F7FC !important; }
     `}</style>
   );
 }
 
-const SIDEBAR_GRADIENT = "linear-gradient(160deg, #1B2A4A 0%, #12294D 55%, #0A1F44 100%)";
+/* Layered: a soft top-left sheen + bottom-right depth shadow on top of the
+   base navy gradient — gives the panel a glossy, embossed 3D feel without
+   changing the underlying color. */
+const SIDEBAR_GRADIENT = [
+  "radial-gradient(130% 55% at 10% -10%, rgba(255,255,255,0.14), transparent 55%)",
+  "radial-gradient(90% 65% at 105% 105%, rgba(0,0,0,0.30), transparent 60%)",
+  "linear-gradient(160deg, #1B2A4A 0%, #12294D 55%, #0A1F44 100%)",
+].join(", ");
 
 const SIDEBAR_ITEMS = [
   { key: "attendance", label: "Attendance", icon: ListChecks },
@@ -76,7 +84,7 @@ function Sidebar({ tab, setTab, employee, onHelp, onLogout }) {
       <div style={{
         display: "flex", alignItems: "center", gap: 10,
         background: SIDEBAR_GRADIENT,
-        padding: 10, boxShadow: "0 4px 14px rgba(15,27,51,0.3)",
+        padding: 10, boxShadow: "0 4px 14px rgba(15,27,51,0.3), inset 0 -1px 0 rgba(255,255,255,0.06)",
       }}>
         <LogoMark size={26} />
         <div style={{ display: "flex", gap: 6, overflowX: "auto", flex: 1 }}>
@@ -110,7 +118,8 @@ function Sidebar({ tab, setTab, employee, onHelp, onLogout }) {
       display: "flex", flexDirection: "column", width: 240, flexShrink: 0,
       minHeight: "100vh", position: "sticky", top: 0,
       background: SIDEBAR_GRADIENT,
-      padding: "22px 16px", boxShadow: "4px 0 24px -10px rgba(15,27,51,0.5)",
+      padding: "22px 16px",
+      boxShadow: "6px 0 30px -12px rgba(10,20,40,0.55), inset -1px 0 0 rgba(255,255,255,0.06), inset 0 1px 0 rgba(255,255,255,0.08)",
     }}>
       <div style={{ marginBottom: 22, paddingLeft: 4 }}>
         <LogoMark size={30} />
@@ -118,13 +127,17 @@ function Sidebar({ tab, setTab, employee, onHelp, onLogout }) {
 
       <div style={{
         display: "flex", alignItems: "center", gap: 10,
-        background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.14)",
+        background: "linear-gradient(155deg, rgba(255,255,255,0.12), rgba(255,255,255,0.03))",
+        border: "1px solid rgba(255,255,255,0.14)",
         borderRadius: 12, padding: "9px 12px", marginBottom: 22,
+        boxShadow: "0 4px 14px -6px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08)",
       }}>
         <div style={{
-          width: 34, height: 34, borderRadius: "50%", background: COLORS.blue, color: "#fff",
+          width: 34, height: 34, borderRadius: "50%",
+          background: `linear-gradient(135deg, ${COLORS.blue}, #1B4FCC)`, color: "#fff",
           display: "flex", alignItems: "center", justifyContent: "center",
           fontWeight: 800, fontSize: 14, flexShrink: 0,
+          boxShadow: "0 3px 8px -2px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.25)",
         }}>
           {initial}
         </div>
@@ -145,10 +158,10 @@ function Sidebar({ tab, setTab, employee, onHelp, onLogout }) {
               style={{
                 display: "flex", alignItems: "center", gap: 10, whiteSpace: "nowrap",
                 padding: "10px 14px", borderRadius: 10, border: "none", cursor: "pointer",
-                background: active ? "#fff" : "transparent",
+                background: active ? "linear-gradient(180deg, #ffffff, #EEF1FA)" : "transparent",
                 color: active ? COLORS.navy : "#CBD5F5",
                 fontWeight: active ? 800 : 600, fontSize: 13.5, textAlign: "left",
-                boxShadow: active ? "0 4px 12px -4px rgba(0,0,0,0.25)" : "none",
+                boxShadow: active ? "0 6px 16px -6px rgba(0,0,0,0.4), inset 0 1px 0 #fff" : "none",
               }}
             >
               <it.icon size={17} /> {it.label}
@@ -239,6 +252,7 @@ export default function EmployeeDashboard({ employee, attendance, punch, now, on
               width: 40, height: 40, borderRadius: "50%", flexShrink: 0,
               background: greet.bg, color: greet.tone,
               display: "flex", alignItems: "center", justifyContent: "center",
+              boxShadow: "0 3px 10px -4px rgba(15,27,51,0.25)",
             }}
           >
             <greet.Icon size={20} />
@@ -380,7 +394,7 @@ function CtaButton({ icon: Icon, label, tone, disabled, onClick }) {
     <button className="rv-cta rv-cta2" onClick={onClick} disabled={disabled} style={{
       background: disabled ? "#E9ECF6" : TONE_BG[tone],
       color: disabled ? DARK.muted : "#fff",
-      boxShadow: disabled ? "none" : "0 8px 20px -6px rgba(15,27,51,0.35)",
+      boxShadow: disabled ? "none" : "0 10px 22px -6px rgba(15,27,51,0.4), inset 0 1px 0 rgba(255,255,255,0.2)",
     }}>
       <Icon size={22} />
       {label}
