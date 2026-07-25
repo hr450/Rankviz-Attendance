@@ -59,7 +59,7 @@ function DashboardStyles() {
   );
 }
 
-const SIDEBAR_GRADIENT = "linear-gradient(160deg, #2F6FED 0%, #1B4FCC 55%, #123A9E 100%)";
+const SIDEBAR_GRADIENT = "linear-gradient(160deg, #1B2A4A 0%, #12294D 55%, #0A1F44 100%)";
 
 const SIDEBAR_ITEMS = [
   { key: "attendance", label: "Attendance", icon: ListChecks },
