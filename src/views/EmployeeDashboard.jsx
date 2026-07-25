@@ -12,15 +12,16 @@ function greetingIcon(hour) {
   return { Icon: Moon, tone: "#9AA6C7", bg: "#EDEFF5" };
 }
 
-/* Dark-mode palette for this page's content area, layered on top of the
-   shared light-mode COLORS constants so the rest of the app is untouched. */
+/* Content-area palette for this page — currently mirrors the shared light
+   theme so cards/text match the rest of the app; only the sidebar is themed
+   separately below. */
 const DARK = {
-  pageBg: "#0B1224",
-  card: "#141B33",
-  cardBorder: "rgba(255,255,255,0.06)",
-  ink: "#F3F5FA",
-  muted: "#8992B3",
-  line: "rgba(255,255,255,0.07)",
+  pageBg: `linear-gradient(180deg, ${COLORS.bg}, #EAEFFB)`,
+  card: "#FFFFFF",
+  cardBorder: COLORS.line,
+  ink: COLORS.ink,
+  muted: COLORS.muted,
+  line: COLORS.line,
 };
 
 /* Local styles for the subtle motion on this page only — kept scoped
@@ -51,14 +52,14 @@ function DashboardStyles() {
       .rv-sidebar-item { transition: background .15s ease, color .15s ease; }
       .rv-sidebar-item:not(.rv-active):hover { background: rgba(255,255,255,0.08) !important; color: #fff; }
 
-      .rv-dark-card { background: ${DARK.card} !important; border: 1px solid ${DARK.cardBorder} !important; color: ${DARK.ink}; }
+      .rv-dark-card { background: ${DARK.card} !important; border: 1px solid ${DARK.cardBorder} !important; color: ${DARK.ink}; box-shadow: 0 6px 20px -12px rgba(15,27,51,0.15); }
       .rv-dark-row { border-bottom: 1px solid ${DARK.line} !important; }
-      .rv-dark-row:hover { background: rgba(255,255,255,0.03) !important; }
+      .rv-dark-row:hover { background: #F5F7FC !important; }
     `}</style>
   );
 }
 
-const SIDEBAR_BG = "data:image/webp;base64,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";
+const SIDEBAR_GRADIENT = "linear-gradient(160deg, #2F6FED 0%, #1B4FCC 55%, #123A9E 100%)";
 
 const SIDEBAR_ITEMS = [
   { key: "attendance", label: "Attendance", icon: ListChecks },
@@ -74,7 +75,7 @@ function Sidebar({ tab, setTab, employee, onHelp, onLogout }) {
     return (
       <div style={{
         display: "flex", alignItems: "center", gap: 10,
-        backgroundImage: `url(${SIDEBAR_BG})`, backgroundSize: "cover", backgroundPosition: "center",
+        background: SIDEBAR_GRADIENT,
         padding: 10, boxShadow: "0 4px 14px rgba(15,27,51,0.3)",
       }}>
         <LogoMark size={26} />
@@ -108,7 +109,7 @@ function Sidebar({ tab, setTab, employee, onHelp, onLogout }) {
     <div style={{
       display: "flex", flexDirection: "column", width: 240, flexShrink: 0,
       minHeight: "100vh", position: "sticky", top: 0,
-      backgroundImage: `url(${SIDEBAR_BG})`, backgroundSize: "cover", backgroundPosition: "center",
+      background: SIDEBAR_GRADIENT,
       padding: "22px 16px", boxShadow: "4px 0 24px -10px rgba(15,27,51,0.5)",
     }}>
       <div style={{ marginBottom: 22, paddingLeft: 4 }}>
@@ -236,9 +237,8 @@ export default function EmployeeDashboard({ employee, attendance, punch, now, on
             className={`rv-greeting-badge${isLive ? " rv-live" : ""}`}
             style={{
               width: 40, height: 40, borderRadius: "50%", flexShrink: 0,
-              background: "rgba(255,255,255,0.06)", color: greet.tone,
+              background: greet.bg, color: greet.tone,
               display: "flex", alignItems: "center", justifyContent: "center",
-              border: "1px solid rgba(255,255,255,0.1)",
             }}
           >
             <greet.Icon size={20} />
@@ -365,7 +365,7 @@ function TimeStat({ label, value, alert }) {
   return (
     <div>
       <div style={{ fontSize: 11.5, color: DARK.muted, fontWeight: 700, letterSpacing: 0.3, textTransform: "uppercase" }}>{label}</div>
-      <div style={{ fontSize: 18, fontWeight: 800, color: alert ? "#FF6B6B" : DARK.ink }}>{value}</div>
+      <div style={{ fontSize: 18, fontWeight: 800, color: alert ? COLORS.red : DARK.ink }}>{value}</div>
     </div>
   );
 }
@@ -378,10 +378,9 @@ const TONE_BG = {
 function CtaButton({ icon: Icon, label, tone, disabled, onClick }) {
   return (
     <button className="rv-cta rv-cta2" onClick={onClick} disabled={disabled} style={{
-      background: disabled ? "rgba(255,255,255,0.05)" : TONE_BG[tone],
+      background: disabled ? "#E9ECF6" : TONE_BG[tone],
       color: disabled ? DARK.muted : "#fff",
-      border: disabled ? "1px solid rgba(255,255,255,0.06)" : "none",
-      boxShadow: disabled ? "none" : "0 8px 20px -6px rgba(0,0,0,0.5)",
+      boxShadow: disabled ? "none" : "0 8px 20px -6px rgba(15,27,51,0.35)",
     }}>
       <Icon size={22} />
       {label}
