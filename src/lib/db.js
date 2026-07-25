@@ -153,13 +153,11 @@ export function logout() {
   setToken(null);
 }
 
-// Kept only so existing imports (e.g. App.jsx) don't break the build.
-// Real account data is no longer fetched with the anon key — this
-// returns empty. If the app actually needs to list accounts somewhere,
-// that should become its own admin-only server route, same pattern as
-// employees.js.
+// Reads accounts through the admin-only /api/accounts server route (service
+// role key, session-checked) instead of the anon key — same pattern as
+// loadEmployees()/loadAttendance() above. Never returns passwords.
 export async function loadAccounts() {
-  return [];
+  return apiFetch("/api/accounts", { method: "GET" });
 }
 
 // TODO: upsertEmployeeCredentials still writes directly with the anon key —
