@@ -73,10 +73,16 @@ export default function App() {
         // stretching the initial blank-screen wait to roughly the SUM of
         // every call's latency (~5-6s). In parallel it's bounded by the
         // single slowest call instead.
+        // /api/accounts is admin-only server-side (it lists login usernames,
+        // which employees have no business seeing) — calling it from an
+        // employee session gets a 401, and since this is a Promise.all, that
+        // single rejection was failing the ENTIRE initial load for every
+        // employee login. Skip it entirely on the employee side.
+        const isAdmin = session.role === "admin";
         const [emps, att, accts, types, requests, balances, holidays] = await Promise.all([
           loadEmployees(),
           loadAttendance(),
-          loadAccounts(),
+          isAdmin ? loadAccounts() : Promise.resolve([]),
           loadLeaveTypes(),
           loadLeaveRequests(),
           loadLeaveBalances(),
