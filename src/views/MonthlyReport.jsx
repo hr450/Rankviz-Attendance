@@ -83,7 +83,7 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
     setStatusError(null);
     setStatusSavingDate(date);
     try {
-      await onSaveEdit(emp.id, date, { manual_status: value || null });
+      await onSaveEdit(emp.id, date, { manualStatus: value || null });
     } catch (e) {
       setStatusError({ date, message: e.message || "Couldn't save that status." });
     }
@@ -303,10 +303,10 @@ function EditAttendanceModal({ date, emp, rec, onClose, onSave }) {
       if (showShift && (shiftStart !== emp.shiftStart || shiftEnd !== emp.shiftEnd)) {
         await updateEmployeeShift(emp.id, shiftStart, shiftEnd);
       }
-      const patch = { check_in: inVal, check_out: outVal, notes };
+      const patch = { checkIn: inVal, checkOut: outVal, notes };
       if (showSecond) {
-        patch.second_check_in = fromDatetimeLocal(secondCheckIn);
-        patch.second_check_out = fromDatetimeLocal(secondCheckOut);
+        patch.secondCheckIn = fromDatetimeLocal(secondCheckIn);
+        patch.secondCheckOut = fromDatetimeLocal(secondCheckOut);
       }
       await onSave(patch);
     } catch (e) {

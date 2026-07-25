@@ -47,6 +47,7 @@ export default async function handler(req, res) {
           wfhCheckIn: r.wfh_check_in, wfhCheckOut: r.wfh_check_out,
           secondCheckIn: r.second_check_in, secondCheckOut: r.second_check_out,
           alternateDay: !!r.alternate_day, leaveReason: r.leave_reason || "",
+          manualStatus: r.manual_status || null,
           notes: r.notes || "", manuallyEdited: !!r.manually_edited,
           editedBy: r.edited_by || null, editedAt: r.edited_at || null,
         };
@@ -62,16 +63,33 @@ export default async function handler(req, res) {
     const { employeeId, date, rec, source } = req.body || {};
     if (!employeeId || !date || !rec) return res.status(400).json({ error: "Invalid payload." });
     try {
+      // A patch may only touch a subset of fields (e.g. the Status-Edit dropdown
+      // only ever sends manualStatus). Load the existing row first and merge,
+      // so an untouched field never gets clobbered back to null.
+      const existingRows = await supaAdminFetch(
+        `attendance?employee_id=eq.${encodeURIComponent(employeeId)}&date=eq.${encodeURIComponent(date)}&select=*`
+      );
+      const existing = (existingRows && existingRows[0]) || {};
+
+      const pick = (val, existingCol) => (val !== undefined ? val : existingCol);
+
       await supaAdminFetch("attendance?on_conflict=employee_id,date", {
         method: "POST",
         headers: { Prefer: "resolution=merge-duplicates" },
         body: JSON.stringify([{
           employee_id: employeeId, date,
-          check_in: rec.checkIn || null, check_out: rec.checkOut || null,
-          type: rec.type || "office", source: source || "web",
-          wfh_check_in: rec.wfhCheckIn || null, wfh_check_out: rec.wfhCheckOut || null,
-          second_check_in: rec.secondCheckIn || null, second_check_out: rec.secondCheckOut || null,
-          alternate_day: !!rec.alternateDay, leave_reason: rec.leaveReason || null,
+          check_in: pick(rec.checkIn, existing.check_in) || null,
+          check_out: pick(rec.checkOut, existing.check_out) || null,
+          type: pick(rec.type, existing.type) || "office",
+          source: source || existing.source || "web",
+          wfh_check_in: pick(rec.wfhCheckIn, existing.wfh_check_in) || null,
+          wfh_check_out: pick(rec.wfhCheckOut, existing.wfh_check_out) || null,
+          second_check_in: pick(rec.secondCheckIn, existing.second_check_in) || null,
+          second_check_out: pick(rec.secondCheckOut, existing.second_check_out) || null,
+          alternate_day: pick(rec.alternateDay, existing.alternate_day) || false,
+          leave_reason: pick(rec.leaveReason, existing.leave_reason) || null,
+          manual_status: rec.manualStatus !== undefined ? (rec.manualStatus || null) : existing.manual_status || null,
+          notes: pick(rec.notes, existing.notes) || null,
           manually_edited: true, edited_by: caller.userId, edited_at: new Date().toISOString(),
         }]),
       });
