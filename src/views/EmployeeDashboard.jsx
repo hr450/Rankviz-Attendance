@@ -577,15 +577,13 @@ function PunchErrorBanner({ message }) {
 }
 
 function RecentActivity({ employee, attendance, now }) {
-  const [showAll, setShowAll] = useState(false);
-  const panelRef = useRef(null);
+  const listRef = useRef(null);
 
-  // Always land at the top of the list when opening — without this, the
-  // browser can preserve/adjust scroll position from before the panel had
-  // any height, landing you mid-list instead of at day one.
+  // Always land at the top (today) — without this, the browser can keep an
+  // old scroll position across re-renders/mounts and land you mid-list.
   useEffect(() => {
-    if (showAll && panelRef.current) panelRef.current.scrollTop = 0;
-  }, [showAll]);
+    if (listRef.current) listRef.current.scrollTop = 0;
+  }, []);
 
   // Every day from the 1st of the current month through today, most recent
   // first. Recomputed on every render from `now`/`attendance`, so a punch
@@ -596,7 +594,6 @@ function RecentActivity({ employee, attendance, now }) {
     const d = new Date(now); d.setDate(d.getDate() - i);
     return todayStr(d);
   });
-  const extraCount = allDays.length - 5;
 
   const DOT_COLOR = {
     present: "#2F9E6E", late: "#D99A2B", wfh: "#2F6FED",
@@ -640,46 +637,17 @@ function RecentActivity({ employee, attendance, now }) {
     );
   };
 
-  const visibleDays = allDays.slice(0, 5);
-  const collapsibleDays = allDays.slice(5);
-
   return (
     <div className="rv-stagger rv-stagger-4" style={{ marginTop: 26 }}>
       <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 10, color: DARK.ink }}>Recent activity</div>
       <div className="rv-card rv-dark-card" style={{ padding: "6px 4px", borderRadius: 16 }}>
-        {visibleDays.map(renderRow)}
-
-        {extraCount > 0 && (
-          <div
-            ref={panelRef}
-            className="rv-expand-panel"
-            style={{
-              maxHeight: showAll ? 340 : 0,
-              overflowY: showAll ? "auto" : "hidden",
-              overflowX: "hidden",
-              overflowAnchor: "none",
-              transition: "max-height .4s ease",
-            }}
-          >
-            {collapsibleDays.map(renderRow)}
-          </div>
-        )}
-
-        {extraCount > 0 && (
-          <button
-            className="rv-show-all-btn"
-            onClick={() => setShowAll(v => !v)}
-            style={{
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-              width: "100%", background: "transparent", border: "none", cursor: "pointer",
-              padding: "10px 16px", fontSize: 12.5, fontWeight: 700, color: COLORS.blue,
-              borderTop: `1px solid ${DARK.line}`,
-            }}
-          >
-            <ChevronDown size={15} style={{ transform: showAll ? "rotate(180deg)" : "none", transition: "transform .3s ease" }} />
-            {showAll ? "Show less" : `Show all this month (${extraCount} more)`}
-          </button>
-        )}
+        <div
+          ref={listRef}
+          className="rv-expand-panel"
+          style={{ maxHeight: 300, overflowY: "auto", overflowX: "hidden", overflowAnchor: "none" }}
+        >
+          {allDays.map(renderRow)}
+        </div>
       </div>
     </div>
   );
