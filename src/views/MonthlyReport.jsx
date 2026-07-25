@@ -3,7 +3,6 @@ import { ChevronLeft, ChevronRight, Coffee, Repeat, Home, Pencil, X, CalendarHea
 import { COLORS, MANUAL_STATUS_OPTIONS } from "../lib/constants";
 import { computeStatus, fmtTime, fmtHrs, monthKey, daysInMonth, todayStr } from "../lib/utils";
 import { StatusPill, StatCard, selectStyle, th, td } from "../components/ui";
-import { updateEmployeeShift } from "../lib/db";
 
 // cdata.js flags a lone punch that lands well after shift_end (with no
 // earlier punch that day) by prefixing its auto-note with "Auto-flag:" —
@@ -16,7 +15,31 @@ function isFlaggedNotARealCheckIn(rec) {
   return !!(rec?.notes && rec.notes.startsWith("Auto-flag:") && rec?.checkIn && !rec?.checkOut);
 }
 
-export default function MonthlyReportView({ employees, attendance, now, onSaveEdit, session, publicHolidays = [] }) {
+// A day can have up to three separate in/out sessions — office, WFH, and a
+// second/night session — and all of them contribute worked hours. Previously
+// only ONE of these (office OR wfh) was counted, so a day with both an office
+// shift and a WFH night session under-reported hours (e.g. showed 6h18m
+// instead of 9h18m when there was also a 3h WFH session that same day).
+function sessionHours(inT, outT) {
+  if (!inT || !outT) return 0;
+  const ms = new Date(outT) - new Date(inT);
+  return ms > 0 ? ms / 3600000 : 0;
+}
+function totalWorkedHours(rec) {
+  if (!rec) return 0;
+  return (
+    sessionHours(rec.checkIn, rec.checkOut) +
+    sessionHours(rec.wfhCheckIn, rec.wfhCheckOut) +
+    sessionHours(rec.secondCheckIn, rec.secondCheckOut)
+  );
+}
+// Whether a day has ANY recorded session at all, worked hours or not — used
+// to decide if the Hours column should show "—" vs a (possibly 0h) value.
+function hasAnySession(rec) {
+  return !!(rec?.checkIn || rec?.wfhCheckIn || rec?.secondCheckIn);
+}
+
+export default function MonthlyReportView({ employees, attendance, now, onSaveEdit, onUpdateShift, session, publicHolidays = [] }) {
   const [empId, setEmpId] = useState(employees[0]?.id || "");
   const [ym, setYm] = useState(monthKey(todayStr(now)));
   const [editingDate, setEditingDate] = useState(null); // date string of the row currently open in the edit modal
@@ -67,8 +90,8 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
       else if (r.status.tone === "wfh") wfh++;
       else if (r.status.tone === "leave") leave++;
       else if (r.status.tone === "absent") absent++;
-      const inT = r.rec?.checkIn || r.rec?.wfhCheckIn, outT = r.rec?.checkOut || r.rec?.wfhCheckOut;
-      if (inT && outT) { totalHours += (new Date(outT) - new Date(inT)) / 3600000; workedDays++; }
+      const dayHours = totalWorkedHours(r.rec);
+      if (dayHours > 0) { totalHours += dayHours; workedDays++; }
     });
     const markedDays = present + half + noCheckout + wfh + absent;
     const attendancePct = markedDays ? Math.round(((present + half + wfh) / markedDays) * 100) : null;
@@ -152,10 +175,8 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
           </thead>
           <tbody>
             {rows.map((r, i) => {
-              const inT = r.rec?.checkIn, outT = r.rec?.checkOut;
-              const hours = (inT && outT) ? (new Date(outT) - new Date(inT)) / 3600000
-                : (r.rec?.wfhCheckIn && r.rec?.wfhCheckOut) ? (new Date(r.rec.wfhCheckOut) - new Date(r.rec.wfhCheckIn)) / 3600000
-                : null;
+              const dayHours = totalWorkedHours(r.rec);
+              const hours = hasAnySession(r.rec) ? dayHours : null;
               const missedCheckout = (r.rec?.checkIn && !r.rec?.checkOut) || (r.rec?.wfhCheckIn && !r.rec?.wfhCheckOut);
               const flaggedNotReal = isFlaggedNotARealCheckIn(r.rec);
               return (
@@ -248,6 +269,7 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
           emp={emp}
           rec={attendance[`${emp.id}|${editingDate}`]}
           onClose={() => setEditingDate(null)}
+          onUpdateShift={onUpdateShift}
           onSave={async (patch) => {
             await onSaveEdit(emp.id, editingDate, patch);
             setEditingDate(null);
@@ -274,7 +296,7 @@ function fromDatetimeLocal(str) {
   return isNaN(d.getTime()) ? null : d.toISOString();
 }
 
-function EditAttendanceModal({ date, emp, rec, onClose, onSave }) {
+function EditAttendanceModal({ date, emp, rec, onClose, onSave, onUpdateShift }) {
   const empName = emp.name;
   const [checkIn, setCheckIn] = useState(toDatetimeLocal(rec?.checkIn));
   const [checkOut, setCheckOut] = useState(toDatetimeLocal(rec?.checkOut));
@@ -301,7 +323,7 @@ function EditAttendanceModal({ date, emp, rec, onClose, onSave }) {
     setSaving(true);
     try {
       if (showShift && (shiftStart !== emp.shiftStart || shiftEnd !== emp.shiftEnd)) {
-        await updateEmployeeShift(emp.id, shiftStart, shiftEnd);
+        await onUpdateShift(emp.id, shiftStart, shiftEnd);
       }
       const patch = { checkIn: inVal, checkOut: outVal, notes };
       if (showSecond) {

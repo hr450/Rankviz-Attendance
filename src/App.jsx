@@ -3,7 +3,7 @@ import { COLORS, SUPABASE_CONFIGURED } from "./lib/constants";
 import { todayStr } from "./lib/utils";
 import {
   loadEmployees, saveEmployees, loadAttendance, saveAttendanceRecord,
-  loadAccounts, recKey, webPunch,
+  loadAccounts, recKey, webPunch, updateEmployeeShift,
   loadLeaveTypes, createLeaveType, deleteLeaveType,
   loadLeaveRequests, createLeaveRequest, decideLeaveRequest,
   loadLeaveBalances, saveLeaveBalance,
@@ -181,6 +181,27 @@ export default function App() {
     }
   }, [session]);
 
+  /* Used by Monthly Report's "+ Change shift" option (via MonthlyReportView's
+     onUpdateShift prop). Previously this called updateEmployeeShift directly
+     from inside the modal, which saved to Supabase fine but never touched
+     App's local `employees` state — so computeStatus() kept using the old
+     shift until a full page reload. Routing it through here means the local
+     state updates immediately, so Late/Present statuses in both Monthly
+     Report and the Employees tab recalculate right away. */
+  const updateShift = useCallback(async (employeeId, shiftStart, shiftEnd) => {
+    setSaveState("saving");
+    try {
+      await updateEmployeeShift(employeeId, shiftStart, shiftEnd);
+      setEmployees(prev => prev.map(e =>
+        e.id === employeeId ? { ...e, shiftStart, shiftEnd } : e
+      ));
+      setSaveState("saved");
+    } catch (e) {
+      setSaveState("error");
+      throw new Error(e.message || "Couldn't update that shift.");
+    }
+  }, []);
+
   const addHoliday = useCallback(async (date, name) => {
     const row = await createPublicHoliday(date, name);
     setPublicHolidays(prev => {
@@ -335,6 +356,7 @@ export default function App() {
             attendance={attendance}
             now={now}
             onSaveEdit={saveManualEdit}
+            onUpdateShift={updateShift}
             session={session}
             publicHolidays={publicHolidays}
           />
