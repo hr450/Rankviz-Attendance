@@ -170,7 +170,7 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
           <thead>
             <tr style={{ color: COLORS.muted, fontSize: 12.5, textAlign: "left" }}>
               <th style={th}>Date</th><th style={th}>Status</th><th style={th}>Check-in</th>
-              <th style={th}>Check-out</th><th style={th}>WFH in</th><th style={th}>WFH out</th><th style={th}>Hours</th><th style={th}>Notes</th><th style={th}>Status-Edit</th><th style={th}></th>
+              <th style={th}>Check-out</th><th style={th}>WFH in</th><th style={th}>WFH out</th><th style={th}>Total Hours</th><th style={th}>Notes</th><th style={th}>Status-Edit</th><th style={th}></th>
             </tr>
           </thead>
           <tbody>
