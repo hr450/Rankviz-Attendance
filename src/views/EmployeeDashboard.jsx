@@ -95,6 +95,11 @@ function DashboardStyles() {
       .rv-dark-row:hover { background: #F5F7FC !important; }
       .rv-show-all-btn { transition: background .15s ease, color .15s ease; }
       .rv-show-all-btn:hover { background: #F5F7FC !important; color: ${COLORS.navy}; }
+      .rv-expand-panel { scrollbar-width: thin; scrollbar-color: #C7D0EC transparent; }
+      .rv-expand-panel::-webkit-scrollbar { width: 6px; }
+      .rv-expand-panel::-webkit-scrollbar-track { background: transparent; }
+      .rv-expand-panel::-webkit-scrollbar-thumb { background: #C7D0EC; border-radius: 999px; }
+      .rv-expand-panel::-webkit-scrollbar-thumb:hover { background: #AEBAE0; }
 
       .rv-edit-link { display: inline-flex; align-items: center; gap: 4px; border: none; background: transparent; cursor: pointer; padding: 0; margin-top: 3px; color: #8FA2E0; font-size: 11px; font-weight: 700; transition: color .15s ease, gap .15s ease; }
       .rv-edit-link:hover { color: #fff; gap: 6px; }
@@ -640,14 +645,13 @@ function RecentActivity({ employee, attendance, now }) {
           <div
             className="rv-expand-panel"
             style={{
-              display: "grid",
-              gridTemplateRows: showAll ? "1fr" : "0fr",
-              transition: "grid-template-rows .4s ease",
+              maxHeight: showAll ? 340 : 0,
+              overflowY: showAll ? "auto" : "hidden",
+              overflowX: "hidden",
+              transition: "max-height .4s ease",
             }}
           >
-            <div style={{ overflow: "hidden", minHeight: 0 }}>
-              {collapsibleDays.map(renderRow)}
-            </div>
+            {collapsibleDays.map(renderRow)}
           </div>
         )}
 
