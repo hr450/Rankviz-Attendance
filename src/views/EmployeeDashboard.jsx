@@ -38,7 +38,7 @@ function DashboardStyles() {
       .rv-row { transition: background .15s ease; }
       .rv-row:hover { background: #F5F7FC; }
       .rv-sidebar-item { transition: background .15s ease, color .15s ease; }
-      .rv-sidebar-item:not(.rv-active):hover { background: #E7EEFF !important; color: ${COLORS.navy}; }
+      .rv-sidebar-item:not(.rv-active):hover { background: rgba(255,255,255,0.08) !important; color: #fff; }
     `}</style>
   );
 }
@@ -54,9 +54,13 @@ function Sidebar({ tab, setTab }) {
   return (
     <div style={{
       display: "flex", flexDirection: isMobile ? "row" : "column", gap: 6,
-      width: isMobile ? "100%" : 200, flexShrink: 0,
+      width: isMobile ? "100%" : 210, flexShrink: 0,
       marginBottom: isMobile ? 18 : 0, marginRight: isMobile ? 0 : 24,
       overflowX: isMobile ? "auto" : "visible",
+      background: COLORS.navy, borderRadius: 16,
+      padding: isMobile ? 8 : "14px 10px",
+      boxShadow: "0 10px 28px -12px rgba(15,27,51,0.5)",
+      alignSelf: isMobile ? "auto" : "flex-start",
     }}>
       {SIDEBAR_ITEMS.map(it => {
         const active = tab === it.key;
@@ -68,10 +72,10 @@ function Sidebar({ tab, setTab }) {
             style={{
               display: "flex", alignItems: "center", gap: 10, whiteSpace: "nowrap",
               padding: "10px 14px", borderRadius: 10, border: "none", cursor: "pointer",
-              background: active ? COLORS.navy : "transparent",
-              color: active ? "#fff" : COLORS.muted,
+              background: active ? "#fff" : "transparent",
+              color: active ? COLORS.navy : "#B9C3E8",
               fontWeight: active ? 800 : 600, fontSize: 13.5, textAlign: "left",
-              boxShadow: active ? "0 4px 12px -4px rgba(15,27,51,0.4)" : "none",
+              boxShadow: active ? "0 4px 12px -4px rgba(0,0,0,0.25)" : "none",
             }}
           >
             <it.icon size={17} /> {it.label}
