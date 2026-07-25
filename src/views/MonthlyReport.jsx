@@ -11,6 +11,31 @@ import { StatusPill, StatCard, selectStyle, th, td } from "../components/ui";
 // checkout with a missed/lost check-in, not a genuine check-in. Detect
 // that here so the table shows "No check-in" instead of presenting the
 // evening time as if someone arrived then.
+// Nicer look for the Status-Edit dropdown and the employee/month pickers —
+// layered on top of the shared `selectStyle` from components/ui so we don't
+// need to touch that file. Custom chevron + colored border on focus/value.
+function statusSelectStyle(value) {
+  const active = !!value;
+  return {
+    ...selectStyle,
+    minWidth: 130,
+    appearance: "none",
+    WebkitAppearance: "none",
+    backgroundImage:
+      "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%23808A9D' stroke-width='1.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>\")",
+    backgroundRepeat: "no-repeat",
+    backgroundPosition: "right 10px center",
+    paddingRight: 28,
+    borderRadius: 9,
+    border: `1.5px solid ${active ? COLORS.blue : COLORS.line}`,
+    background: active ? "#EEF4FF" : "#fff",
+    color: active ? "#2B4C9E" : COLORS.ink,
+    fontWeight: active ? 700 : 500,
+    cursor: "pointer",
+    transition: "border-color 120ms ease, background 120ms ease",
+  };
+}
+
 function isFlaggedNotARealCheckIn(rec) {
   return !!(rec?.notes && rec.notes.startsWith("Auto-flag:") && rec?.checkIn && !rec?.checkOut);
 }
@@ -90,7 +115,7 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
       else if (r.status.tone === "wfh") wfh++;
       else if (r.status.tone === "leave") leave++;
       else if (r.status.tone === "absent") absent++;
-      const dayHours = totalWorkedHours(r.rec);
+      const dayHours = r.rec?.manualTotalHours != null ? r.rec.manualTotalHours : totalWorkedHours(r.rec);
       if (dayHours > 0) { totalHours += dayHours; workedDays++; }
     });
     const markedDays = present + half + noCheckout + wfh + absent;
@@ -120,7 +145,7 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
       <h1 className="rv-header-in" style={{ fontSize: 26, fontWeight: 800, margin: "0 0 18px" }}>Monthly Report</h1>
 
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 20 }}>
-        <select value={empId} onChange={e => setEmpId(e.target.value)} style={{ ...selectStyle, minWidth: 220, fontWeight: 700 }}>
+        <select value={empId} onChange={e => setEmpId(e.target.value)} style={{ ...statusSelectStyle(empId), minWidth: 220, fontWeight: 700 }}>
           {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
         </select>
         <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#fff", borderRadius: 10, padding: "6px 10px", border: `1px solid ${COLORS.line}` }}>
@@ -178,9 +203,10 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
           <tbody>
             {rows.map((r, i) => {
               const officeHours = sessionHours(r.rec?.checkIn, r.rec?.checkOut);
-              const wfhHours = sessionHours(r.rec?.wfhCheckIn, r.rec?.wfhCheckOut);
-              const dayHours = totalWorkedHours(r.rec);
-              const hours = hasAnySession(r.rec) ? dayHours : null;
+              const wfhHours = r.rec?.manualWfhHours != null ? r.rec.manualWfhHours : sessionHours(r.rec?.wfhCheckIn, r.rec?.wfhCheckOut);
+              const dayHours = r.rec?.manualTotalHours != null ? r.rec.manualTotalHours : totalWorkedHours(r.rec);
+              const hours = (hasAnySession(r.rec) || r.rec?.manualTotalHours != null) ? dayHours : null;
+              const wfhHoursShown = (r.rec?.wfhCheckIn && r.rec?.wfhCheckOut) || r.rec?.manualWfhHours != null;
               const missedCheckout = (r.rec?.checkIn && !r.rec?.checkOut) || (r.rec?.wfhCheckIn && !r.rec?.wfhCheckOut);
               const flaggedNotReal = isFlaggedNotARealCheckIn(r.rec);
               return (
@@ -203,7 +229,7 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
                     {r.rec?.wfhCheckIn ? (r.rec?.wfhCheckOut ? fmtTime(r.rec.wfhCheckOut) : "No checkout") : "—"}
                   </td>
                   <td style={{ ...td, color: COLORS.muted }}>
-                    {(r.rec?.wfhCheckIn && r.rec?.wfhCheckOut) ? fmtHrs(wfhHours) : "—"}
+                    {wfhHoursShown ? fmtHrs(wfhHours) : "—"}
                   </td>
                   <td style={{ ...td, color: COLORS.muted, fontWeight: 700 }}>{hours != null ? fmtHrs(hours) : "—"}</td>
                   <td style={td}>
@@ -240,7 +266,7 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
                       value={r.rec?.manualStatus || ""}
                       onChange={e => handleStatusChange(r.date, e.target.value)}
                       disabled={statusSavingDate === r.date}
-                      style={{ ...selectStyle, minWidth: 118, opacity: statusSavingDate === r.date ? 0.6 : 1 }}
+                      style={{ ...statusSelectStyle(r.rec?.manualStatus), opacity: statusSavingDate === r.date ? 0.6 : 1 }}
                     >
                       {MANUAL_STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                     </select>
@@ -306,6 +332,45 @@ function fromDatetimeLocal(str) {
   return isNaN(d.getTime()) ? null : d.toISOString();
 }
 
+// Recognizes leave-code shorthand and check-in/out phrasing typed into Notes,
+// so HR doesn't have to also fill separate fields by hand. Case-insensitive.
+// Leave codes: CL, SL, AL, "Short Leave" -> manualStatus.
+// Times: "check in 9:30am" / "check out 6:05 pm" -> checkIn/checkOut patch.
+const NOTES_LEAVE_MAP = {
+  cl: "leave", "casual leave": "leave",
+  sl: "leave", "sick leave": "leave",
+  al: "leave", "annual leave": "leave",
+  "short leave": "half",
+};
+function parseNotesForAutoFields(notes, dateStr) {
+  const out = {};
+  if (!notes) return out;
+  const lower = notes.toLowerCase();
+
+  for (const code of Object.keys(NOTES_LEAVE_MAP)) {
+    const re = new RegExp(`(^|[^a-z])${code}([^a-z]|$)`, "i");
+    if (re.test(lower)) { out.manualStatus = NOTES_LEAVE_MAP[code]; break; }
+  }
+
+  const timeRe = /check[\s-]?(in|out)\s*(?:at|@)?\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/gi;
+  let m;
+  while ((m = timeRe.exec(notes))) {
+    const [, dir, hRaw, minRaw, ampm] = m;
+    let h = parseInt(hRaw, 10);
+    const min = minRaw ? parseInt(minRaw, 10) : 0;
+    if (ampm) {
+      const isPM = ampm.toLowerCase() === "pm";
+      if (isPM && h < 12) h += 12;
+      if (!isPM && h === 12) h = 0;
+    }
+    const d = new Date(`${dateStr}T00:00:00`);
+    d.setHours(h, min, 0, 0);
+    if (dir.toLowerCase() === "in") out.checkIn = d.toISOString();
+    else out.checkOut = d.toISOString();
+  }
+  return out;
+}
+
 function EditAttendanceModal({ date, emp, rec, onClose, onSave, onUpdateShift }) {
   const empName = emp.name;
   const [checkIn, setCheckIn] = useState(toDatetimeLocal(rec?.checkIn));
@@ -317,6 +382,9 @@ function EditAttendanceModal({ date, emp, rec, onClose, onSave, onUpdateShift })
   const [showShift, setShowShift] = useState(false);
   const [shiftStart, setShiftStart] = useState(emp.shiftStart || "09:30");
   const [shiftEnd, setShiftEnd] = useState(emp.shiftEnd || "18:30");
+  const [showHours, setShowHours] = useState(rec?.manualWfhHours != null || rec?.manualTotalHours != null);
+  const [wfhHoursOverride, setWfhHoursOverride] = useState(rec?.manualWfhHours != null ? String(rec.manualWfhHours) : "");
+  const [totalHoursOverride, setTotalHoursOverride] = useState(rec?.manualTotalHours != null ? String(rec.manualTotalHours) : "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
@@ -330,6 +398,14 @@ function EditAttendanceModal({ date, emp, rec, onClose, onSave, onUpdateShift })
       setError("Check-out must be after check-in.");
       return;
     }
+    if (showHours && wfhHoursOverride && isNaN(parseFloat(wfhHoursOverride))) {
+      setError("WFH hours override must be a number (e.g. 3.5).");
+      return;
+    }
+    if (showHours && totalHoursOverride && isNaN(parseFloat(totalHoursOverride))) {
+      setError("Total hours override must be a number (e.g. 8.5).");
+      return;
+    }
     setSaving(true);
     try {
       if (showShift && (shiftStart !== emp.shiftStart || shiftEnd !== emp.shiftEnd)) {
@@ -340,6 +416,19 @@ function EditAttendanceModal({ date, emp, rec, onClose, onSave, onUpdateShift })
         patch.secondCheckIn = fromDatetimeLocal(secondCheckIn);
         patch.secondCheckOut = fromDatetimeLocal(secondCheckOut);
       }
+      if (showHours) {
+        patch.manualWfhHours = wfhHoursOverride ? parseFloat(wfhHoursOverride) : null;
+        patch.manualTotalHours = totalHoursOverride ? parseFloat(totalHoursOverride) : null;
+      }
+      // Notes shorthand (CL/SL/AL/Short Leave, "check in/out 9:30am") auto-fills
+      // the matching real fields instead of just sitting there as text — so a
+      // one-line note is enough and HR doesn't have to duplicate it into the
+      // dropdown or the time pickers by hand. Explicit field edits above always
+      // win; this only fills in what the person left untouched.
+      const auto = parseNotesForAutoFields(notes, date);
+      if (auto.manualStatus && !rec?.manualStatus) patch.manualStatus = auto.manualStatus;
+      if (auto.checkIn && !inVal) patch.checkIn = auto.checkIn;
+      if (auto.checkOut && !outVal) patch.checkOut = auto.checkOut;
       await onSave(patch);
     } catch (e) {
       setError(e.message || "Couldn't save that correction.");
@@ -409,14 +498,45 @@ function EditAttendanceModal({ date, emp, rec, onClose, onSave, onUpdateShift })
             </>
           )}
 
+          {!showHours ? (
+            <button onClick={() => setShowHours(true)} style={linkBtn}>+ Override WFH / Total hours</button>
+          ) : (
+            <>
+              <div style={{ display: "flex", gap: 10 }}>
+                <Field label="WFH hours (decimal, e.g. 3.5)">
+                  <input
+                    type="number" step="0.1" min="0" placeholder="Auto"
+                    value={wfhHoursOverride} onChange={e => setWfhHoursOverride(e.target.value)}
+                    style={inputStyle}
+                  />
+                </Field>
+                <Field label="Total hours (decimal, e.g. 8.5)">
+                  <input
+                    type="number" step="0.1" min="0" placeholder="Auto"
+                    value={totalHoursOverride} onChange={e => setTotalHoursOverride(e.target.value)}
+                    style={inputStyle}
+                  />
+                </Field>
+              </div>
+              <p style={{ margin: "-6px 0 0", fontSize: 11.5, color: COLORS.muted }}>
+                Leave blank to keep auto-calculating from check-in/out times. Useful when a WFH session
+                crosses midnight and shows 0h by mistake.
+              </p>
+            </>
+          )}
+
           <Field label="Notes">
             <textarea
               value={notes}
               onChange={e => setNotes(e.target.value)}
-              placeholder="e.g. Forgot to check out, corrected by HR"
+              placeholder="e.g. Forgot to check out, corrected by HR — or CL / SL / AL / Short Leave, check in 9:30am, check out 6:05pm"
               rows={3}
               style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }}
             />
+            <span style={{ fontSize: 11, color: COLORS.muted }}>
+              Tip: typing CL / SL / AL / Short Leave, or "check in 9:30am" / "check out 6:05pm" here
+              auto-fills the matching status or time field on save.
+            </span>
           </Field>
 
           {error && <p style={{ margin: 0, color: COLORS.red, fontSize: 13, fontWeight: 600 }}>{error}</p>}
