@@ -134,10 +134,11 @@ export default function EmployeeDashboard({ employee, attendance, punch, now, on
             <greet.Icon size={20} />
           </div>
           <div>
-            <h1 style={{ fontSize: 24, fontWeight: 800, margin: 0 }}>
+            <h1 style={{ fontSize: 28, fontWeight: 800, margin: 0, letterSpacing: -0.3 }}>
               Hi, {employee.name.split(" ")[0]}
             </h1>
-            <p style={{ color: COLORS.muted, margin: 0, fontSize: 14 }}>
+            <p style={{ color: COLORS.muted, margin: "2px 0 0", fontSize: 14, display: "flex", alignItems: "center", gap: 6 }}>
+              {isLive && <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#2F9E6E", flexShrink: 0 }} />}
               {now.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" })}
             </p>
           </div>
@@ -151,7 +152,7 @@ export default function EmployeeDashboard({ employee, attendance, punch, now, on
               <>
                 <div key={date} className="rv-card rv-anim-slideupin rv-stagger rv-stagger-2" style={{ padding: 24, marginBottom: 22 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-                    <div style={{ fontWeight: 800, fontSize: 15.5 }}>Today's attendance</div>
+                    <div style={{ fontWeight: 800, fontSize: 17 }}>Today's attendance</div>
                     <StatusPill {...status} />
                   </div>
 
@@ -248,17 +249,35 @@ export default function EmployeeDashboard({ employee, attendance, punch, now, on
 }
 
 function TopBar({ employee, onHelp, onLogout }) {
+  const initial = employee.name ? employee.name.trim()[0].toUpperCase() : "?";
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 480;
   return (
     <div style={{
       position: "sticky", top: 0, zIndex: 30, background: COLORS.navy, color: "#fff",
-      padding: "13px 18px", display: "flex", alignItems: "center", justifyContent: "space-between",
+      padding: "12px 18px", display: "flex", alignItems: "center", justifyContent: "space-between",
       boxShadow: "0 2px 12px rgba(0,0,0,0.15)",
     }}>
       <LogoMark size={30} />
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span style={{ fontSize: 13, color: "#B9C3E8", fontWeight: 600, marginRight: 4, display: window.innerWidth < 480 ? "none" : "inline" }}>
-          {employee.department}
-        </span>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{
+          display: "flex", alignItems: "center", gap: 9,
+          background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)",
+          borderRadius: 12, padding: isMobile ? 4 : "5px 12px 5px 5px",
+        }}>
+          <div style={{
+            width: 28, height: 28, borderRadius: "50%", background: COLORS.blue, color: "#fff",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontWeight: 800, fontSize: 12.5, flexShrink: 0,
+          }}>
+            {initial}
+          </div>
+          {!isMobile && (
+            <div style={{ lineHeight: 1.25 }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: "#fff" }}>{employee.name}</div>
+              <div style={{ fontSize: 11, color: "#B9C3E8", fontWeight: 600 }}>{employee.department}</div>
+            </div>
+          )}
+        </div>
         <button onClick={onHelp} title="Help" style={topIconBtn}><HelpCircle size={17} /></button>
         <button onClick={onLogout} title="Log out" style={topIconBtn}><SignOut size={17} /></button>
       </div>
@@ -327,7 +346,7 @@ function RecentActivity({ employee, attendance, now }) {
 
   return (
     <div className="rv-stagger rv-stagger-4" style={{ marginTop: 26 }}>
-      <div style={{ fontWeight: 800, fontSize: 14.5, marginBottom: 10 }}>Recent activity</div>
+      <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 10 }}>Recent activity</div>
       <div className="rv-card" style={{ padding: "6px 4px" }}>
         {days.map(date => {
           const rec = attendance[`${employee.id}|${date}`];
@@ -362,7 +381,7 @@ const LEAVE_STATUS_STYLE = {
 function MyLeaveRequestsFull({ leaveRequests }) {
   return (
     <div>
-      <div style={{ fontWeight: 800, fontSize: 14.5, marginBottom: 10, display: "flex", alignItems: "center", gap: 7 }}>
+      <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 10, display: "flex", alignItems: "center", gap: 7 }}>
         <Clock size={15} color={COLORS.amber} /> My leave requests
       </div>
       {(!leaveRequests || leaveRequests.length === 0) ? (
@@ -409,7 +428,7 @@ function AlternateDayLog({ employee, attendance }) {
 
   return (
     <div>
-      <div style={{ fontWeight: 800, fontSize: 14.5, marginBottom: 10 }}>Alternate day record</div>
+      <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 10 }}>Alternate day record</div>
       {entries.length === 0 ? (
         <div className="rv-card" style={{ padding: "28px 20px", textAlign: "center", color: COLORS.muted, fontSize: 13.5 }}>
           No alternate days marked yet.
