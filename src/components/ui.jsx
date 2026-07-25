@@ -3,14 +3,27 @@ import { COLORS } from "../lib/constants";
 import { TONE_STYLES } from "../lib/utils";
 import logoFull from "../assets/logo-full.png";
 
-/* Animates a number counting up to `value` whenever it changes. */
+/* Animates a number counting up to `value` whenever it changes. Only
+   applies to genuine finite numbers — StatCard is also used with already-
+   formatted strings (e.g. "55%", "8.5h", "—"), and doing arithmetic on
+   those (value - start) silently produces NaN that then gets stuck as the
+   displayed value forever. Anything non-numeric is shown as-is, unanimated. */
 function useCountUp(value, duration = 550) {
+  const isNumeric = typeof value === "number" && Number.isFinite(value);
   const [display, setDisplay] = useState(value);
   const prevRef = useRef(value);
   useEffect(() => {
-    const start = prevRef.current;
+    if (!isNumeric) {
+      // Non-numeric (or no longer numeric) value — just show it directly,
+      // no animation, and reset the "previous value" baseline so a later
+      // switch back to a number doesn't try to animate from a stale ref.
+      setDisplay(value);
+      prevRef.current = value;
+      return;
+    }
+    const start = typeof prevRef.current === "number" && Number.isFinite(prevRef.current) ? prevRef.current : 0;
     const change = value - start;
-    if (change === 0) return;
+    if (change === 0) { setDisplay(value); prevRef.current = value; return; }
     const startTime = performance.now();
     let raf;
     function tick(now) {
@@ -22,7 +35,7 @@ function useCountUp(value, duration = 550) {
     }
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [value, duration]);
+  }, [value, duration, isNumeric]);
   return display;
 }
 
