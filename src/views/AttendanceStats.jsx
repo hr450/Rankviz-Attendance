@@ -138,35 +138,51 @@ function MonthlyStats({ data }) {
   return (
     <>
       <StatCardsRow totals={totals} employeeCount={perEmployee.length} />
-      <div className="rv-card" style={{ padding: "16px 20px", overflowX: "auto" }}>
-        <h3 style={{ margin: "0 0 12px", fontSize: 15, fontWeight: 700 }}>By employee</h3>
-        <table className="rv-table-hover" style={{ width: "100%", borderCollapse: "collapse", minWidth: 920 }}>
-          <thead>
-            <tr style={{ color: COLORS.muted, fontSize: 12.5, textAlign: "left" }}>
-              <th style={th}>Employee</th><th style={th}>Present</th><th style={th}>Late</th>
-              <th style={th}>Half day</th><th style={th}>WFH</th><th style={th}>Short leave</th>
-              <th style={th}>Leave</th><th style={th}>Absent</th><th style={th}>Holiday</th><th style={th}>No checkout</th>
-            </tr>
-          </thead>
-          <tbody>
-            {perEmployee.map((r, i) => (
-              <tr key={r.emp.id} className="rv-row-in" style={{ borderTop: `1px solid ${COLORS.line}`, animationDelay: `${i * 25}ms` }}>
-                <td style={td}><strong>{r.emp.name}</strong></td>
-                <td style={td}>{r.present}</td>
-                <td style={td}>{r.late}</td>
-                <td style={td}>{r.half}</td>
-                <td style={td}>{r.wfh}</td>
-                <td style={td}>{r.shortLeave}</td>
-                <td style={td}>{r.leave}</td>
-                <td style={td}>{r.absent}</td>
-                <td style={td}>{r.holiday}</td>
-                <td style={td}>{r.noCheckout}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <TotalsBarChart totals={totals} />
     </>
+  );
+}
+
+/* Simple horizontal bar chart of this month's org-wide totals — replaces
+   the old per-employee table so no individual names/data show here. */
+const STAT_CHART_LABELS = {
+  present: "Present", late: "Late", half: "Half day", wfh: "WFH",
+  shortLeave: "Short leave", leave: "Leave", absent: "Absent",
+  holiday: "Holiday", noCheckout: "No checkout",
+};
+const STAT_CHART_COLORS = {
+  present: "#2F9E6E", late: "#D99A2B", half: "#5B9CFF", wfh: "#8B6FE0",
+  shortLeave: "#2BB6C4", leave: "#6C63FF", absent: "#D9534F",
+  holiday: "#94A3C4", noCheckout: "#E8823A",
+};
+
+function TotalsBarChart({ totals }) {
+  const keys = Object.keys(STAT_CHART_LABELS);
+  const max = Math.max(1, ...keys.map(k => totals[k] || 0));
+  return (
+    <div className="rv-card" style={{ padding: "20px 24px" }}>
+      <h3 style={{ margin: "0 0 18px", fontSize: 15, fontWeight: 700 }}>Attendance breakdown</h3>
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {keys.map((k, i) => {
+          const value = totals[k] || 0;
+          const pct = Math.round((value / max) * 100);
+          return (
+            <div key={k} className="rv-row-in" style={{ animationDelay: `${i * 40}ms` }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5, fontSize: 12.5 }}>
+                <span style={{ fontWeight: 700, color: COLORS.ink }}>{STAT_CHART_LABELS[k]}</span>
+                <span style={{ fontWeight: 700, color: COLORS.muted }}>{value}</span>
+              </div>
+              <div style={{ height: 10, borderRadius: 999, background: "#F0F2F8", overflow: "hidden" }}>
+                <div style={{
+                  width: `${pct}%`, height: "100%", borderRadius: 999,
+                  background: STAT_CHART_COLORS[k], transition: "width .5s ease",
+                }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
