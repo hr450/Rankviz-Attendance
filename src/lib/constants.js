@@ -30,9 +30,12 @@ export const HALFDAY_HOURS = 4.5;
 export const MANUAL_STATUS_OPTIONS = [
   { value: "", label: "Auto" },
   { value: "present", label: "Present" },
+  { value: "late", label: "Late" },
   { value: "half", label: "Half Day" },
   { value: "wfh", label: "WFH" },
   { value: "short_leave", label: "Short Leave" },
+  { value: "leave", label: "Leave" },
+  { value: "extra_day", label: "Extra Day" },
   { value: "holiday", label: "Holiday" },
   { value: "absent", label: "Absent" },
 ];

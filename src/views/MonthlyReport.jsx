@@ -36,6 +36,28 @@ function statusSelectStyle(value) {
   };
 }
 
+// Classifies a day into CL / SL / AL / Short Leave for the summary counts.
+// Prefers rec.leaveReason (set either by an approved leave request — see
+// App.jsx's decideLeave — or by the Notes shorthand above), and falls back
+// to scanning the raw notes text directly so older records that predate
+// this feature still get counted correctly without needing to be re-saved.
+function leaveCodeFor(rec) {
+  if (!rec) return null;
+  const reason = (rec.leaveReason || "").toLowerCase();
+  if (reason.includes("casual")) return "CL";
+  if (reason.includes("sick")) return "SL";
+  if (reason.includes("annual")) return "AL";
+  if (reason.includes("short")) return "ShortLeave";
+
+  const notes = (rec.notes || "").toLowerCase();
+  const has = (code) => new RegExp(`(^|[^a-z])${code}([^a-z]|$)`, "i").test(notes);
+  if (has("cl") || notes.includes("casual leave")) return "CL";
+  if (has("sl") || notes.includes("sick leave")) return "SL";
+  if (has("al") || notes.includes("annual leave")) return "AL";
+  if (notes.includes("short leave")) return "ShortLeave";
+  return null;
+}
+
 function isFlaggedNotARealCheckIn(rec) {
   return !!(rec?.notes && rec.notes.startsWith("Auto-flag:") && rec?.checkIn && !rec?.checkOut);
 }
@@ -116,6 +138,7 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
 
   const stats = useMemo(() => {
     let present = 0, late = 0, half = 0, noCheckout = 0, wfh = 0, leave = 0, absent = 0, totalHours = 0, workedDays = 0;
+    let shortLeave = 0, cl = 0, sl = 0, al = 0;
     rows.forEach(r => {
       if (r.status.tone === "present") present++;
       else if (r.status.tone === "late") { present++; late++; }
@@ -124,12 +147,17 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
       else if (r.status.tone === "wfh") wfh++;
       else if (r.status.tone === "leave") leave++;
       else if (r.status.tone === "absent") absent++;
+      const code = leaveCodeFor(r.rec);
+      if (code === "CL") cl++;
+      else if (code === "SL") sl++;
+      else if (code === "AL") al++;
+      else if (code === "ShortLeave") shortLeave++;
       const dayHours = r.rec?.manualTotalHours != null ? r.rec.manualTotalHours : totalWorkedHours(r.rec);
       if (dayHours > 0) { totalHours += dayHours; workedDays++; }
     });
     const markedDays = present + half + noCheckout + wfh + absent;
     const attendancePct = markedDays ? Math.round(((present + half + wfh) / markedDays) * 100) : null;
-    return { present, late, half, noCheckout, wfh, leave, absent, avgHours: workedDays ? totalHours / workedDays : 0, attendancePct };
+    return { present, late, half, noCheckout, wfh, leave, absent, shortLeave, cl, sl, al, avgHours: workedDays ? totalHours / workedDays : 0, attendancePct };
   }, [rows]);
 
   // Status-Edit dropdown — lets HR override the auto-calculated status for
@@ -170,8 +198,12 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
         <StatCard label="Present" value={stats.present} tone="present" />
         <StatCard label="Late" value={stats.late} tone="half" />
         <StatCard label="Half day" value={stats.half} tone="half" />
+        <StatCard label="Short Leave" value={stats.shortLeave} tone="half" />
         <StatCard label="WFH" value={stats.wfh} tone="present" />
         <StatCard label="Leave" value={stats.leave} tone="leave" />
+        <StatCard label="CL" value={stats.cl} tone="leave" />
+        <StatCard label="SL" value={stats.sl} tone="leave" />
+        <StatCard label="AL" value={stats.al} tone="leave" />
         <StatCard label="Absent" value={stats.absent} tone="absent" />
         <StatCard label="Attendance" value={stats.attendancePct != null ? `${stats.attendancePct}%` : "—"} tone="present" />
         <StatCard label="Avg hrs/day" value={stats.avgHours ? stats.avgHours.toFixed(1) + "h" : "—"} tone="pending" />
@@ -216,6 +248,7 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
               const dayHours = r.rec?.manualTotalHours != null ? r.rec.manualTotalHours : totalWorkedHours(r.rec);
               const hours = (hasAnySession(r.rec) || r.rec?.manualTotalHours != null) ? dayHours : null;
               const wfhHoursShown = (r.rec?.wfhCheckIn && r.rec?.wfhCheckOut) || r.rec?.manualWfhHours != null;
+              const rowLeaveCode = leaveCodeFor(r.rec);
               const missedCheckout = (r.rec?.checkIn && !r.rec?.checkOut) || (r.rec?.wfhCheckIn && !r.rec?.wfhCheckOut);
               const flaggedNotReal = isFlaggedNotARealCheckIn(r.rec);
               return (
@@ -255,6 +288,14 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
                     {r.rec?.type === "wfh" && !r.rec?.alternateDay && (
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: COLORS.blue, fontWeight: 700, fontSize: 12 }}>
                         <Home size={11} /> WFH
+                      </span>
+                    )}
+                    {rowLeaveCode && (
+                      <span style={{
+                        display: "inline-flex", alignItems: "center", gap: 4,
+                        color: rowLeaveCode === "ShortLeave" ? "#B2650A" : "#3E5A9E", fontWeight: 700, fontSize: 12,
+                      }}>
+                        {rowLeaveCode === "ShortLeave" ? "Short Leave" : rowLeaveCode}
                       </span>
                     )}
                     {r.rec?.notes && (
@@ -343,13 +384,19 @@ function fromDatetimeLocal(str) {
 
 // Recognizes leave-code shorthand and check-in/out phrasing typed into Notes,
 // so HR doesn't have to also fill separate fields by hand. Case-insensitive.
-// Leave codes: CL, SL, AL, "Short Leave" -> manualStatus.
+// Leave codes: CL, SL, AL, "Short Leave" -> manualStatus + a canonical
+// leaveReason/code, so these can be individually counted in the stats cards
+// (Casual/Sick/Annual/Short leave), the same way approved leave requests
+// already store a leaveReason (see App.jsx's decideLeave).
 // Times: "check in 9:30am" / "check out 6:05 pm" -> checkIn/checkOut patch.
 const NOTES_LEAVE_MAP = {
-  cl: "leave", "casual leave": "leave",
-  sl: "leave", "sick leave": "leave",
-  al: "leave", "annual leave": "leave",
-  "short leave": "half",
+  cl: { status: "leave", reason: "Casual Leave", code: "CL" },
+  "casual leave": { status: "leave", reason: "Casual Leave", code: "CL" },
+  sl: { status: "leave", reason: "Sick Leave", code: "SL" },
+  "sick leave": { status: "leave", reason: "Sick Leave", code: "SL" },
+  al: { status: "leave", reason: "Annual Leave", code: "AL" },
+  "annual leave": { status: "leave", reason: "Annual Leave", code: "AL" },
+  "short leave": { status: "half", reason: "Short Leave", code: "ShortLeave" },
 };
 function parseNotesForAutoFields(notes, dateStr) {
   const out = {};
@@ -358,7 +405,12 @@ function parseNotesForAutoFields(notes, dateStr) {
 
   for (const code of Object.keys(NOTES_LEAVE_MAP)) {
     const re = new RegExp(`(^|[^a-z])${code}([^a-z]|$)`, "i");
-    if (re.test(lower)) { out.manualStatus = NOTES_LEAVE_MAP[code]; break; }
+    if (re.test(lower)) {
+      const hit = NOTES_LEAVE_MAP[code];
+      out.manualStatus = hit.status;
+      out.leaveReason = hit.reason;
+      break;
+    }
   }
 
   const timeRe = /check[\s-]?(in|out)\s*(?:at|@)?\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/gi;
@@ -436,6 +488,7 @@ function EditAttendanceModal({ date, emp, rec, onClose, onSave, onUpdateShift })
       // win; this only fills in what the person left untouched.
       const auto = parseNotesForAutoFields(notes, date);
       if (auto.manualStatus && !rec?.manualStatus) patch.manualStatus = auto.manualStatus;
+      if (auto.leaveReason && !rec?.leaveReason) patch.leaveReason = auto.leaveReason;
       if (auto.checkIn && !inVal) patch.checkIn = auto.checkIn;
       if (auto.checkOut && !outVal) patch.checkOut = auto.checkOut;
       await onSave(patch);
