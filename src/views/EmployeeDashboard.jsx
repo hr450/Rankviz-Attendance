@@ -1,9 +1,8 @@
 import React, { useState, useRef, useEffect } from "react";
-import { LogIn, LogOut, Home, Coffee, HelpCircle, LogOut as SignOut, Repeat, MapPin, X, Check, CalendarPlus, Clock, Sun, Moon, CloudSun, ListChecks, WifiOff, Pencil, ChevronDown } from "lucide-react";
+import { LogIn, LogOut, Home, Coffee, LogOut as SignOut, Repeat, MapPin, X, Check, CalendarPlus, Clock, Sun, Moon, CloudSun, ListChecks, WifiOff, Pencil, ChevronDown, Settings as SettingsIcon, User, Camera, Palette, LifeBuoy, Send, Ticket } from "lucide-react";
 import { COLORS } from "../lib/constants";
 import { computeStatus, fmtTime, fmtHrs, todayStr } from "../lib/utils";
 import { StatusPill, LogoMark, Field, inputStyle, secondaryBtn } from "../components/ui";
-import HelpModal from "../components/HelpModal";
 
 /* --- Mirrors the HR monthly report's own calculations (MonthlyReport.jsx)
    so an employee's "Today" / "Recent activity" numbers always match what
@@ -49,16 +48,30 @@ function greetingIcon(hour) {
   return { Icon: Moon, tone: "#9AA6C7", bg: "#EDEFF5" };
 }
 
-/* Content-area palette for this page — currently mirrors the shared light
-   theme so cards/text match the rest of the app; only the sidebar is themed
-   separately below. */
-const DARK = {
+/* Content-area palette for this page. Two variants — the values are pushed
+   onto the page as CSS custom properties (--rv-pageBg, --rv-card, etc.) from
+   the top-level wrapper, so every card/text color below just reads
+   var(--rv-ink) etc. and repaints instantly when Settings > Appearance is
+   toggled, without threading a theme prop through every subcomponent. Only
+   the navy sidebar stays constant across both themes — it's brand color,
+   not a "surface". */
+const THEME_LIGHT = {
   pageBg: `linear-gradient(180deg, ${COLORS.bg}, #EAEFFB)`,
   card: "#FFFFFF",
   cardBorder: COLORS.line,
   ink: COLORS.ink,
   muted: COLORS.muted,
   line: COLORS.line,
+  rowHover: "#F5F7FC",
+};
+const THEME_DARK = {
+  pageBg: "linear-gradient(180deg, #0E1424, #131B30)",
+  card: "#1B2338",
+  cardBorder: "#2B3552",
+  ink: "#EEF1FA",
+  muted: "#93A0C4",
+  line: "#2B3552",
+  rowHover: "#242E4A",
 };
 
 /* Local styles for the subtle motion on this page only — kept scoped
@@ -86,15 +99,15 @@ function DashboardStyles() {
       .rv-cta2:not(:disabled):hover { transform: translateY(-3px); }
       .rv-cta2:not(:disabled):active { transform: translateY(0) scale(0.98); }
       .rv-row { transition: background .15s ease; }
-      .rv-row:hover { background: #F5F7FC; }
+      .rv-row:hover { background: var(--rv-rowHover, #F5F7FC); }
       .rv-sidebar-item { transition: background .15s ease, color .15s ease, box-shadow .15s ease, transform .15s ease; }
       .rv-sidebar-item:not(.rv-active):hover { background: rgba(255,255,255,0.08) !important; color: #fff; box-shadow: inset 0 1px 0 rgba(255,255,255,0.06); transform: translateX(3px); }
 
-      .rv-dark-card { background: ${DARK.card} !important; border: 1px solid ${DARK.cardBorder} !important; color: ${DARK.ink}; box-shadow: 0 10px 28px -16px rgba(15,27,51,0.22), 0 2px 8px -4px rgba(15,27,51,0.08); transition: box-shadow .2s ease; }
-      .rv-dark-row { border-bottom: 1px solid ${DARK.line} !important; }
-      .rv-dark-row:hover { background: #F5F7FC !important; }
+      .rv-dark-card { background: var(--rv-card) !important; border: 1px solid var(--rv-cardBorder) !important; color: var(--rv-ink); box-shadow: 0 10px 28px -16px rgba(15,27,51,0.22), 0 2px 8px -4px rgba(15,27,51,0.08); transition: box-shadow .2s ease; }
+      .rv-dark-row { border-bottom: 1px solid var(--rv-line) !important; }
+      .rv-dark-row:hover { background: var(--rv-rowHover, #F5F7FC) !important; }
       .rv-show-all-btn { transition: background .15s ease, color .15s ease; }
-      .rv-show-all-btn:hover { background: #F5F7FC !important; color: ${COLORS.navy}; }
+      .rv-show-all-btn:hover { background: var(--rv-rowHover, #F5F7FC) !important; color: var(--rv-ink); }
       .rv-expand-panel { scrollbar-width: thin; scrollbar-color: #C7D0EC transparent; }
       .rv-expand-panel::-webkit-scrollbar { width: 6px; }
       .rv-expand-panel::-webkit-scrollbar-track { background: transparent; }
@@ -124,7 +137,7 @@ const SIDEBAR_ITEMS = [
   { key: "alternate", label: "Alternate days", icon: Repeat },
 ];
 
-function Sidebar({ tab, setTab, employee, onHelp, onLogout, onEditProfile, leaveRequests, attendance }) {
+function Sidebar({ tab, setTab, employee, onSettings, onLogout, onEditProfile, leaveRequests, attendance }) {
   const [expanded, setExpanded] = useState(null); // 'leaves' | 'alternate' | null
   const isMobile = typeof window !== "undefined" && window.innerWidth < 720;
   const initial = employee.name ? employee.name.trim()[0].toUpperCase() : "?";
@@ -158,6 +171,7 @@ function Sidebar({ tab, setTab, employee, onHelp, onLogout, onEditProfile, leave
             );
           })}
         </div>
+        <button onClick={onSettings} title="Settings" style={{ ...topIconBtn, flexShrink: 0 }}><SettingsIcon size={16} /></button>
         <button onClick={onLogout} title="Log out" style={{ ...topIconBtn, flexShrink: 0 }}><SignOut size={16} /></button>
       </div>
     );
@@ -184,12 +198,12 @@ function Sidebar({ tab, setTab, employee, onHelp, onLogout, onEditProfile, leave
       }}>
         <div style={{
           width: 34, height: 34, borderRadius: "50%",
-          background: `linear-gradient(135deg, ${COLORS.blue}, #1B4FCC)`, color: "#fff",
-          display: "flex", alignItems: "center", justifyContent: "center",
+          background: employee.avatar ? "transparent" : `linear-gradient(135deg, ${COLORS.blue}, #1B4FCC)`, color: "#fff",
+          display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden",
           fontWeight: 800, fontSize: 14, flexShrink: 0,
           boxShadow: "0 3px 8px -2px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.25)",
         }}>
-          {initial}
+          {employee.avatar ? <img src={employee.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : initial}
         </div>
         <div style={{ lineHeight: 1.25, minWidth: 0 }}>
           <div style={{ fontSize: 13.5, fontWeight: 800, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{employee.name}</div>
@@ -261,14 +275,14 @@ function Sidebar({ tab, setTab, employee, onHelp, onLogout, onEditProfile, leave
       <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingTop: 14, borderTop: "1px solid rgba(255,255,255,0.1)" }}>
         <button
           className="rv-sidebar-item"
-          onClick={onHelp}
+          onClick={onSettings}
           style={{
             display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 10,
             border: "none", cursor: "pointer", background: "transparent", color: "#CBD5F5",
             fontWeight: 600, fontSize: 13.5, textAlign: "left",
           }}
         >
-          <HelpCircle size={17} /> Help
+          <SettingsIcon size={17} /> Settings
         </button>
         <button
           className="rv-sidebar-item"
@@ -341,13 +355,23 @@ function SidebarAlternatePreview({ employee, attendance }) {
 }
 
 export default function EmployeeDashboard({ employee, attendance, punch, now, onLogout, leaveTypes = [], leaveRequests = [], onApplyLeave, onUpdateProfile }) {
-  const [showHelp, setShowHelp] = useState(false);
   const [wfhModal, setWfhModal] = useState(null); // 'in' | 'out' | null
   const [leaveModal, setLeaveModal] = useState(false);
-  const [editProfileModal, setEditProfileModal] = useState(false);
-  const [profileOverride, setProfileOverride] = useState(null); // { name, department } — optimistic local edit
+  const [settingsModal, setSettingsModal] = useState(null); // null | 'profile' | 'appearance' | 'helpdesk'
+  const [profileOverride, setProfileOverride] = useState(null); // { name, department, avatar } — optimistic local edit
   const [tab, setTab] = useState("attendance"); // 'attendance' | 'leaves' | 'alternate'
   const [punchError, setPunchError] = useState(null);
+
+  // Dark mode is a per-browser display preference, not employee data — kept
+  // in localStorage (not the backend) and remembered across visits.
+  const [darkMode, setDarkMode] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem("rv-dark-mode") === "1";
+  });
+  useEffect(() => {
+    if (typeof window !== "undefined") window.localStorage.setItem("rv-dark-mode", darkMode ? "1" : "0");
+  }, [darkMode]);
+  const theme = darkMode ? THEME_DARK : THEME_LIGHT;
 
   const displayEmployee = profileOverride ? { ...employee, ...profileOverride } : employee;
 
@@ -382,10 +406,17 @@ export default function EmployeeDashboard({ employee, attendance, punch, now, on
     <div style={{
       minHeight: "100vh", display: "flex",
       flexDirection: typeof window !== "undefined" && window.innerWidth < 720 ? "column" : "row",
-      background: DARK.pageBg,
+      background: "var(--rv-pageBg)",
+      "--rv-pageBg": theme.pageBg,
+      "--rv-card": theme.card,
+      "--rv-cardBorder": theme.cardBorder,
+      "--rv-ink": theme.ink,
+      "--rv-muted": theme.muted,
+      "--rv-line": theme.line,
+      "--rv-rowHover": theme.rowHover,
     }}>
       <DashboardStyles />
-      <Sidebar tab={tab} setTab={setTab} employee={displayEmployee} onHelp={() => setShowHelp(true)} onLogout={onLogout} onEditProfile={() => setEditProfileModal(true)} leaveRequests={leaveRequests} attendance={attendance} />
+      <Sidebar tab={tab} setTab={setTab} employee={displayEmployee} onSettings={() => setSettingsModal("profile")} onLogout={onLogout} onEditProfile={() => setSettingsModal("profile")} leaveRequests={leaveRequests} attendance={attendance} />
 
       <div style={{ flex: 1, minWidth: 0, padding: "0 32px" }}>
         <div style={{ maxWidth: 960, margin: "0 auto", padding: "30px 0 60px" }}>
@@ -402,10 +433,10 @@ export default function EmployeeDashboard({ employee, attendance, punch, now, on
             <greet.Icon size={20} />
           </div>
           <div>
-            <h1 style={{ fontSize: 28, fontWeight: 800, margin: 0, letterSpacing: -0.3, color: DARK.ink }}>
+            <h1 style={{ fontSize: 28, fontWeight: 800, margin: 0, letterSpacing: -0.3, color: "var(--rv-ink)" }}>
               Hi, {displayEmployee.name.split(" ")[0]}
             </h1>
-            <p style={{ color: DARK.muted, margin: "2px 0 0", fontSize: 14, display: "flex", alignItems: "center", gap: 6 }}>
+            <p style={{ color: "var(--rv-muted)", margin: "2px 0 0", fontSize: 14, display: "flex", alignItems: "center", gap: 6 }}>
               {isLive && <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#3DD68C", flexShrink: 0 }} />}
               {now.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" })}
             </p>
@@ -417,7 +448,7 @@ export default function EmployeeDashboard({ employee, attendance, punch, now, on
               <>
                 <div key={date} className="rv-card rv-dark-card rv-anim-slideupin rv-stagger rv-stagger-2" style={{ padding: 24, marginBottom: 22, borderRadius: 16 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-                    <div style={{ fontWeight: 800, fontSize: 17, color: DARK.ink }}>Today's attendance</div>
+                    <div style={{ fontWeight: 800, fontSize: 17, color: "var(--rv-ink)" }}>Today's attendance</div>
                     <StatusPill {...status} />
                   </div>
 
@@ -491,17 +522,18 @@ export default function EmployeeDashboard({ employee, attendance, punch, now, on
         </div>
       </div>
 
-      {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
-      {editProfileModal && (
-        <EditProfileModal
+      {settingsModal && (
+        <SettingsModal
           employee={displayEmployee}
-          onClose={() => setEditProfileModal(false)}
-          onSubmit={async (payload) => {
+          initialTab={settingsModal}
+          darkMode={darkMode}
+          onToggleDarkMode={setDarkMode}
+          onClose={() => setSettingsModal(null)}
+          onSubmitProfile={async (payload) => {
             if (onUpdateProfile) {
               await onUpdateProfile({ employeeId: employee.id, ...payload });
             }
-            setProfileOverride(payload);
-            setEditProfileModal(false);
+            setProfileOverride(prev => ({ ...prev, ...payload }));
           }}
         />
       )}
@@ -535,8 +567,8 @@ const topIconBtn = {
 function TimeStat({ label, value, alert }) {
   return (
     <div>
-      <div style={{ fontSize: 11.5, color: DARK.muted, fontWeight: 700, letterSpacing: 0.3, textTransform: "uppercase" }}>{label}</div>
-      <div style={{ fontSize: 18, fontWeight: 800, color: alert ? COLORS.red : DARK.ink }}>{value}</div>
+      <div style={{ fontSize: 11.5, color: "var(--rv-muted)", fontWeight: 700, letterSpacing: 0.3, textTransform: "uppercase" }}>{label}</div>
+      <div style={{ fontSize: 18, fontWeight: 800, color: alert ? COLORS.red : "var(--rv-ink)" }}>{value}</div>
     </div>
   );
 }
@@ -550,7 +582,7 @@ function CtaButton({ icon: Icon, label, tone, disabled, onClick }) {
   return (
     <button className="rv-cta rv-cta2" onClick={onClick} disabled={disabled} style={{
       background: disabled ? "#E9ECF6" : TONE_BG[tone],
-      color: disabled ? DARK.muted : "#fff",
+      color: disabled ? "var(--rv-muted)" : "#fff",
       boxShadow: disabled ? "none" : "0 10px 22px -6px rgba(15,27,51,0.4), inset 0 1px 0 rgba(255,255,255,0.2)",
     }}>
       <Icon size={22} />
@@ -616,19 +648,19 @@ function RecentActivity({ employee, attendance, now }) {
         padding: "11px 16px", gap: 10, flexWrap: "wrap", borderRadius: 8,
       }}>
         <div>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 9, fontSize: 13, color: DARK.ink, fontWeight: 700 }}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 9, fontSize: 13, color: "var(--rv-ink)", fontWeight: 700 }}>
             <span style={{
               width: 7, height: 7, borderRadius: "50%", flexShrink: 0,
-              background: DOT_COLOR[status?.tone] || DARK.muted,
+              background: DOT_COLOR[status?.tone] || "var(--rv-muted)",
             }} />
             {new Date(date + "T00:00:00").toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}
           </span>
           {(hasTimes || flaggedIn) && (
-            <div style={{ fontSize: 12, color: DARK.muted, marginTop: 2, marginLeft: 16 }}>
-              In: <strong style={{ color: flaggedIn ? COLORS.red : DARK.ink }}>{inTime || "—"}</strong>
+            <div style={{ fontSize: 12, color: "var(--rv-muted)", marginTop: 2, marginLeft: 16 }}>
+              In: <strong style={{ color: flaggedIn ? COLORS.red : "var(--rv-ink)" }}>{inTime || "—"}</strong>
               {"  ·  "}
-              Out: <strong style={{ color: outTime === "No checkout" ? COLORS.red : DARK.ink }}>{outTime || "—"}</strong>
-              {dayHours > 0 && <> {"  ·  "}Hours: <strong style={{ color: DARK.ink }}>{fmtHrs(dayHours)}</strong></>}
+              Out: <strong style={{ color: outTime === "No checkout" ? COLORS.red : "var(--rv-ink)" }}>{outTime || "—"}</strong>
+              {dayHours > 0 && <> {"  ·  "}Hours: <strong style={{ color: "var(--rv-ink)" }}>{fmtHrs(dayHours)}</strong></>}
             </div>
           )}
         </div>
@@ -639,7 +671,7 @@ function RecentActivity({ employee, attendance, now }) {
 
   return (
     <div className="rv-stagger rv-stagger-4" style={{ marginTop: 26 }}>
-      <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 10, color: DARK.ink }}>Recent activity</div>
+      <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 10, color: "var(--rv-ink)" }}>Recent activity</div>
       <div className="rv-card rv-dark-card" style={{ padding: "6px 4px", borderRadius: 16 }}>
         <div
           ref={listRef}
@@ -662,11 +694,11 @@ const LEAVE_STATUS_STYLE = {
 function MyLeaveRequestsFull({ leaveRequests }) {
   return (
     <div>
-      <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 10, display: "flex", alignItems: "center", gap: 7, color: DARK.ink }}>
+      <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 10, display: "flex", alignItems: "center", gap: 7, color: "var(--rv-ink)" }}>
         <Clock size={15} color={COLORS.amber} /> My leave requests
       </div>
       {(!leaveRequests || leaveRequests.length === 0) ? (
-        <div className="rv-card rv-dark-card" style={{ padding: "28px 20px", textAlign: "center", color: DARK.muted, fontSize: 13.5, borderRadius: 16 }}>
+        <div className="rv-card rv-dark-card" style={{ padding: "28px 20px", textAlign: "center", color: "var(--rv-muted)", fontSize: 13.5, borderRadius: 16 }}>
           No leave requests yet — use "Apply for leave" above when you need one.
         </div>
       ) : (
@@ -679,8 +711,8 @@ function MyLeaveRequestsFull({ leaveRequests }) {
                 padding: "11px 16px", gap: 10, flexWrap: "wrap", borderRadius: 8,
               }}>
                 <div>
-                  <div style={{ fontWeight: 700, fontSize: 13.5, color: DARK.ink }}>{r.leaveTypeName}</div>
-                  <div style={{ fontSize: 12, color: DARK.muted }}>
+                  <div style={{ fontWeight: 700, fontSize: 13.5, color: "var(--rv-ink)" }}>{r.leaveTypeName}</div>
+                  <div style={{ fontSize: 12, color: "var(--rv-muted)" }}>
                     {new Date(r.startDate + "T00:00:00").toLocaleDateString([], { month: "short", day: "numeric" })}
                     {" – "}
                     {new Date(r.endDate + "T00:00:00").toLocaleDateString([], { month: "short", day: "numeric" })}
@@ -709,9 +741,9 @@ function AlternateDayLog({ employee, attendance }) {
 
   return (
     <div>
-      <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 10, color: DARK.ink }}>Alternate day record</div>
+      <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 10, color: "var(--rv-ink)" }}>Alternate day record</div>
       {entries.length === 0 ? (
-        <div className="rv-card rv-dark-card" style={{ padding: "28px 20px", textAlign: "center", color: DARK.muted, fontSize: 13.5, borderRadius: 16 }}>
+        <div className="rv-card rv-dark-card" style={{ padding: "28px 20px", textAlign: "center", color: "var(--rv-muted)", fontSize: 13.5, borderRadius: 16 }}>
           No alternate days marked yet.
         </div>
       ) : (
@@ -729,17 +761,17 @@ function AlternateDayLog({ employee, attendance }) {
               }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
                   <span style={{ width: 7, height: 7, borderRadius: "50%", background: COLORS.violet, flexShrink: 0 }} />
-                  <span style={{ fontSize: 13, fontWeight: 700, color: DARK.ink }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "var(--rv-ink)" }}>
                     {new Date(date + "T00:00:00").toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}
                   </span>
                   {isWfh && (
                     <span style={{ fontSize: 11, color: "#5B9CFF", fontWeight: 700, background: "rgba(91,156,255,0.12)", padding: "2px 8px", borderRadius: 999 }}>WFH</span>
                   )}
                 </div>
-                <div style={{ display: "flex", gap: 16, fontSize: 12.5, color: DARK.muted }}>
-                  <span>In: <strong style={{ color: flaggedIn ? COLORS.red : DARK.ink }}>{flaggedIn ? "No check-in" : (fmtTime(checkIn) || "—")}</strong></span>
-                  <span>Out: <strong style={{ color: DARK.ink }}>{fmtTime(checkOut) || "—"}</strong></span>
-                  {dayHours > 0 && <span>Hours: <strong style={{ color: DARK.ink }}>{fmtHrs(dayHours)}</strong></span>}
+                <div style={{ display: "flex", gap: 16, fontSize: 12.5, color: "var(--rv-muted)" }}>
+                  <span>In: <strong style={{ color: flaggedIn ? COLORS.red : "var(--rv-ink)" }}>{flaggedIn ? "No check-in" : (fmtTime(checkIn) || "—")}</strong></span>
+                  <span>Out: <strong style={{ color: "var(--rv-ink)" }}>{fmtTime(checkOut) || "—"}</strong></span>
+                  {dayHours > 0 && <span>Hours: <strong style={{ color: "var(--rv-ink)" }}>{fmtHrs(dayHours)}</strong></span>}
                 </div>
               </div>
             );
@@ -750,68 +782,380 @@ function AlternateDayLog({ employee, attendance }) {
   );
 }
 
-function EditProfileModal({ employee, onClose, onSubmit }) {
-  const [name, setName] = useState(employee.name || "");
-  const [department, setDepartment] = useState(employee.department || "");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+/* -------------------------------------------------------------------- *
+ * Settings: Profile (with picture), Appearance (light/dark), Help desk *
+ * -------------------------------------------------------------------- */
 
-  const submit = async () => {
-    setError("");
-    if (!name.trim()) { setError("Name can't be empty."); return; }
-    setBusy(true);
-    try {
-      await onSubmit({ name: name.trim(), department: department.trim() });
-    } catch (e) {
-      setError(e.message || "Couldn't save your changes.");
-      setBusy(false);
-    }
-  };
+const SETTINGS_TABS = [
+  { key: "profile", label: "Profile", icon: User },
+  { key: "appearance", label: "Appearance", icon: Palette },
+  { key: "helpdesk", label: "Help desk", icon: LifeBuoy },
+];
+
+function SettingsModal({ employee, initialTab, darkMode, onToggleDarkMode, onClose, onSubmitProfile }) {
+  const [activeTab, setActiveTab] = useState(initialTab || "profile");
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 720;
 
   return (
     <div style={{
       position: "fixed", inset: 0, background: "rgba(15,27,51,0.5)", display: "flex",
       alignItems: "center", justifyContent: "center", padding: 16, zIndex: 60,
     }} className="rv-anim-fadein" onClick={onClose}>
-      <div className="rv-card rv-anim-popin" style={{ width: "100%", maxWidth: 420, padding: 28 }} onClick={e => e.stopPropagation()}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-            <div style={{ width: 38, height: 38, borderRadius: 10, background: COLORS.bg, color: COLORS.blue, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Pencil size={18} />
-            </div>
-            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>Edit profile</h3>
-          </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: COLORS.muted }}><X size={20} /></button>
+      <div
+        className="rv-card rv-anim-popin"
+        style={{
+          width: "100%", maxWidth: 760, padding: 0, borderRadius: 18, overflow: "hidden",
+          display: "flex", flexDirection: isMobile ? "column" : "row",
+          maxHeight: "88vh",
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Left nav */}
+        <div style={{
+          width: isMobile ? "100%" : 200, flexShrink: 0,
+          background: "#F7F8FC", borderRight: isMobile ? "none" : `1px solid ${COLORS.line}`,
+          borderBottom: isMobile ? `1px solid ${COLORS.line}` : "none",
+          padding: isMobile ? "14px 10px" : "22px 12px",
+          display: "flex", flexDirection: isMobile ? "row" : "column", gap: 4,
+          overflowX: isMobile ? "auto" : "visible",
+        }}>
+          {!isMobile && (
+            <div style={{ fontSize: 17, fontWeight: 800, color: COLORS.navy, padding: "0 10px 16px" }}>Settings</div>
+          )}
+          {SETTINGS_TABS.map(t => {
+            const active = activeTab === t.key;
+            return (
+              <button
+                key={t.key}
+                onClick={() => setActiveTab(t.key)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 10, whiteSpace: "nowrap",
+                  width: isMobile ? "auto" : "100%", padding: "10px 12px", borderRadius: 10, border: "none",
+                  cursor: "pointer", textAlign: "left",
+                  background: active ? "#fff" : "transparent",
+                  color: active ? COLORS.navy : COLORS.muted,
+                  fontWeight: active ? 800 : 600, fontSize: 13.5,
+                  boxShadow: active ? "0 3px 10px -4px rgba(15,27,51,0.25)" : "none",
+                }}
+              >
+                <t.icon size={16} /> {t.label}
+              </button>
+            );
+          })}
         </div>
-        <p style={{ color: COLORS.muted, fontSize: 13, margin: "6px 0 20px" }}>
-          Update how your name and designation appear across the app.
-        </p>
 
-        <Field label="Full name">
-          <input value={name} onChange={e => setName(e.target.value)} style={inputStyle} placeholder="e.g. Ayesha Hassan" />
-        </Field>
-        <Field label="Designation">
-          <input value={department} onChange={e => setDepartment(e.target.value)} style={inputStyle} placeholder="e.g. Software Engineer" />
-        </Field>
-
-        {error && <div style={{ color: COLORS.red, fontSize: 12.5, fontWeight: 600, marginBottom: 10 }}>{error}</div>}
-
-        <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
-          <button onClick={onClose} style={secondaryBtn}>Cancel</button>
-          <button
-            onClick={submit}
-            disabled={busy}
-            style={{
-              flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7,
-              background: `linear-gradient(135deg, ${COLORS.blue}, ${COLORS.orange})`, color: "#fff",
-              border: "none", borderRadius: 11, padding: "11px 18px", fontWeight: 700, fontSize: 14, cursor: "pointer",
-              opacity: busy ? 0.7 : 1,
-            }}
-          >
-            <Check size={16} /> {busy ? "Saving…" : "Save changes"}
+        {/* Right content */}
+        <div style={{ flex: 1, minWidth: 0, position: "relative", overflowY: "auto", padding: 28 }}>
+          <button onClick={onClose} style={{ position: "absolute", top: 20, right: 20, background: "none", border: "none", cursor: "pointer", color: COLORS.muted }}>
+            <X size={20} />
           </button>
+          {activeTab === "profile" && <ProfileSettingsPane employee={employee} onSubmit={onSubmitProfile} />}
+          {activeTab === "appearance" && <AppearanceSettingsPane darkMode={darkMode} onToggleDarkMode={onToggleDarkMode} />}
+          {activeTab === "helpdesk" && <HelpDeskPane employee={employee} />}
         </div>
       </div>
+    </div>
+  );
+}
+
+function ProfileSettingsPane({ employee, onSubmit }) {
+  const [name, setName] = useState(employee.name || "");
+  const [department, setDepartment] = useState(employee.department || "");
+  const [avatar, setAvatar] = useState(employee.avatar || null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [saved, setSaved] = useState(false);
+  const fileInputRef = useRef(null);
+  const initial = name ? name.trim()[0].toUpperCase() : "?";
+
+  const handleFile = (file) => {
+    setError("");
+    if (!file) return;
+    if (!file.type.startsWith("image/")) { setError("Please choose an image file."); return; }
+    if (file.size > 2 * 1024 * 1024) { setError("Image is too large — please choose one under 2MB."); return; }
+    const reader = new FileReader();
+    reader.onload = () => setAvatar(reader.result);
+    reader.onerror = () => setError("Couldn't read that image — try another file.");
+    reader.readAsDataURL(file);
+  };
+
+  const submit = async () => {
+    setError(""); setSaved(false);
+    if (!name.trim()) { setError("Name can't be empty."); return; }
+    setBusy(true);
+    try {
+      await onSubmit({ name: name.trim(), department: department.trim(), avatar });
+      setSaved(true);
+    } catch (e) {
+      setError(e.message || "Couldn't save your changes.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div>
+      <h3 style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 800 }}>Profile</h3>
+      <p style={{ color: COLORS.muted, fontSize: 13, margin: "0 0 22px" }}>
+        Your photo and name appear across the app, including to HR.
+      </p>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24 }}>
+        <div style={{ position: "relative", flexShrink: 0 }}>
+          <div style={{
+            width: 72, height: 72, borderRadius: "50%", overflow: "hidden",
+            background: avatar ? "transparent" : `linear-gradient(135deg, ${COLORS.blue}, #1B4FCC)`,
+            color: "#fff", display: "flex", alignItems: "center", justifyContent: "center",
+            fontWeight: 800, fontSize: 26, border: `1px solid ${COLORS.line}`,
+          }}>
+            {avatar ? <img src={avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : initial}
+          </div>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            title="Change photo"
+            style={{
+              position: "absolute", bottom: -2, right: -2, width: 28, height: 28, borderRadius: "50%",
+              background: COLORS.navy, color: "#fff", border: "2px solid #fff", cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}
+          >
+            <Camera size={13} />
+          </button>
+          <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }}
+            onChange={e => handleFile(e.target.files?.[0])} />
+        </div>
+        <div>
+          <button onClick={() => fileInputRef.current?.click()} style={{ ...secondaryBtn, flex: "unset", padding: "8px 14px", fontSize: 12.5 }}>
+            Upload photo
+          </button>
+          {avatar && (
+            <button onClick={() => setAvatar(null)} style={{ display: "block", marginTop: 8, background: "none", border: "none", color: COLORS.red, fontSize: 12, fontWeight: 700, cursor: "pointer", padding: 0 }}>
+              Remove photo
+            </button>
+          )}
+        </div>
+      </div>
+
+      <Field label="Full name">
+        <input value={name} onChange={e => setName(e.target.value)} style={inputStyle} placeholder="e.g. Ayesha Hassan" />
+      </Field>
+      <Field label="Designation">
+        <input value={department} onChange={e => setDepartment(e.target.value)} style={inputStyle} placeholder="e.g. Software Engineer" />
+      </Field>
+
+      {error && <div style={{ color: COLORS.red, fontSize: 12.5, fontWeight: 600, marginBottom: 10 }}>{error}</div>}
+      {saved && !busy && <div style={{ color: "#2F9E6E", fontSize: 12.5, fontWeight: 600, marginBottom: 10 }}>Saved.</div>}
+
+      <button
+        onClick={submit}
+        disabled={busy}
+        style={{
+          display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7,
+          background: `linear-gradient(135deg, ${COLORS.blue}, ${COLORS.orange})`, color: "#fff",
+          border: "none", borderRadius: 11, padding: "11px 20px", fontWeight: 700, fontSize: 14, cursor: "pointer",
+          opacity: busy ? 0.7 : 1, marginTop: 6,
+        }}
+      >
+        <Check size={16} /> {busy ? "Saving…" : "Save changes"}
+      </button>
+    </div>
+  );
+}
+
+function AppearanceSettingsPane({ darkMode, onToggleDarkMode }) {
+  const options = [
+    { key: false, label: "Light", Icon: Sun, bg: "#FFFFFF", ink: "#0F1B33", sub: "#F5F7FC" },
+    { key: true, label: "Dark", Icon: Moon, bg: "#1B2338", ink: "#EEF1FA", sub: "#131B30" },
+  ];
+  return (
+    <div>
+      <h3 style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 800 }}>Appearance</h3>
+      <p style={{ color: COLORS.muted, fontSize: 13, margin: "0 0 22px" }}>
+        Choose how RankViz looks on this device.
+      </p>
+      <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+        {options.map(opt => {
+          const active = darkMode === opt.key;
+          return (
+            <button
+              key={opt.label}
+              onClick={() => onToggleDarkMode(opt.key)}
+              style={{
+                width: 150, border: active ? `2px solid ${COLORS.blue}` : `1px solid ${COLORS.line}`,
+                borderRadius: 14, padding: 0, cursor: "pointer", overflow: "hidden", background: "#fff",
+                boxShadow: active ? "0 6px 16px -8px rgba(47,111,235,0.45)" : "none",
+              }}
+            >
+              <div style={{ background: opt.sub, padding: "14px 12px 10px" }}>
+                <div style={{ background: opt.bg, borderRadius: 8, padding: "10px 10px", display: "flex", alignItems: "center", gap: 6 }}>
+                  <opt.Icon size={14} color={opt.ink} />
+                  <div style={{ height: 6, flex: 1, borderRadius: 4, background: opt.ink, opacity: 0.15 }} />
+                </div>
+              </div>
+              <div style={{ padding: "10px 12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: COLORS.navy }}>{opt.label}</span>
+                {active && <Check size={15} color={COLORS.blue} />}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* Help desk: quick FAQ, a ticket form, and a running list of tickets this
+   employee has raised. Tickets are kept in localStorage per-employee for
+   now — wire onSubmitTicket up to a real API route when the backend has one,
+   and HR-side visibility will need its own read path. */
+const ATTENDANCE_FAQ = [
+  { q: "I forgot to check in — what do I do?", a: "Raise a ticket below under \"Missed punch\" with the date and roughly what time you arrived. HR can add or correct a check-in on your record." },
+  { q: "How do alternate days work?", a: "Mark today as an alternate day from the Alternate days tab before or after you check in. It flags the day so HR knows it's outside your usual schedule." },
+  { q: "When does a leave request actually count?", a: "Applying for leave only sends a request to HR — it doesn't mark your attendance until they approve it. You'll see the status update in \"My leave requests.\"" },
+  { q: "My check-out shows as missing but I did check out.", a: "This usually means the check-out didn't register — raise a ticket with the date and time so HR can correct it manually." },
+  { q: "Can I work from home and still check in at the office later the same day?", a: "Yes — the dashboard supports a second session per day. Use WFH check-in/out and office check-in/out independently; both count toward your total hours." },
+];
+
+const TICKET_CATEGORIES = ["Missed punch", "Leave issue", "Alternate day", "Payroll", "Access / login", "Other"];
+
+function loadTickets(employeeId) {
+  try {
+    if (typeof window === "undefined") return [];
+    const raw = window.localStorage.getItem(`rv-tickets-${employeeId}`);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+function saveTickets(employeeId, tickets) {
+  try {
+    if (typeof window !== "undefined") window.localStorage.setItem(`rv-tickets-${employeeId}`, JSON.stringify(tickets));
+  } catch { /* ignore storage errors */ }
+}
+
+function HelpDeskPane({ employee }) {
+  const [openFaq, setOpenFaq] = useState(null);
+  const [tickets, setTickets] = useState(() => loadTickets(employee.id));
+  const [category, setCategory] = useState(TICKET_CATEGORIES[0]);
+  const [subject, setSubject] = useState("");
+  const [description, setDescription] = useState("");
+  const [error, setError] = useState("");
+  const [showForm, setShowForm] = useState(false);
+
+  const submitTicket = () => {
+    setError("");
+    if (!subject.trim()) { setError("Give it a short subject."); return; }
+    const ticket = {
+      id: `${Date.now()}`,
+      category, subject: subject.trim(), description: description.trim(),
+      status: "open", createdAt: new Date().toISOString(),
+    };
+    const next = [ticket, ...tickets];
+    setTickets(next);
+    saveTickets(employee.id, next);
+    setSubject(""); setDescription(""); setShowForm(false);
+  };
+
+  return (
+    <div>
+      <h3 style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 800 }}>Help desk</h3>
+      <p style={{ color: COLORS.muted, fontSize: 13, margin: "0 0 20px" }}>
+        Answers to common attendance questions, or raise a ticket for HR.
+      </p>
+
+      {/* FAQ */}
+      <div style={{ marginBottom: 24 }}>
+        {ATTENDANCE_FAQ.map((item, i) => {
+          const open = openFaq === i;
+          return (
+            <div key={i} style={{ borderBottom: `1px solid ${COLORS.line}` }}>
+              <button
+                onClick={() => setOpenFaq(open ? null : i)}
+                style={{
+                  width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+                  background: "none", border: "none", cursor: "pointer", padding: "12px 2px",
+                  textAlign: "left", fontSize: 13.5, fontWeight: 700, color: COLORS.navy,
+                }}
+              >
+                {item.q}
+                <ChevronDown size={15} style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform .2s ease", flexShrink: 0, marginLeft: 10, opacity: 0.6 }} />
+              </button>
+              {open && <p style={{ margin: "0 2px 14px", fontSize: 12.5, color: COLORS.muted, lineHeight: 1.5 }}>{item.a}</p>}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Raise a ticket */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+        <div style={{ fontSize: 15, fontWeight: 800, color: COLORS.navy, display: "flex", alignItems: "center", gap: 7 }}>
+          <Ticket size={16} /> My tickets
+        </div>
+        {!showForm && (
+          <button onClick={() => setShowForm(true)} style={{ ...secondaryBtn, flex: "unset", padding: "7px 12px", fontSize: 12.5 }}>
+            Raise a ticket
+          </button>
+        )}
+      </div>
+
+      {showForm && (
+        <div style={{ background: "#F7F8FC", border: `1px solid ${COLORS.line}`, borderRadius: 12, padding: 16, marginBottom: 16 }}>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <Field label="Category" style={{ flex: "1 1 160px" }}>
+              <select value={category} onChange={e => setCategory(e.target.value)} style={inputStyle}>
+                {TICKET_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </Field>
+            <Field label="Subject" style={{ flex: "2 1 200px" }}>
+              <input value={subject} onChange={e => setSubject(e.target.value)} style={inputStyle} placeholder="e.g. Missed check-out on July 22" />
+            </Field>
+          </div>
+          <Field label="Details (optional)">
+            <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3}
+              style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }}
+              placeholder="Anything HR should know" />
+          </Field>
+          {error && <div style={{ color: COLORS.red, fontSize: 12.5, fontWeight: 600, marginBottom: 8 }}>{error}</div>}
+          <div style={{ display: "flex", gap: 10 }}>
+            <button onClick={() => { setShowForm(false); setError(""); }} style={secondaryBtn}>Cancel</button>
+            <button
+              onClick={submitTicket}
+              style={{
+                flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7,
+                background: `linear-gradient(135deg, ${COLORS.blue}, ${COLORS.orange})`, color: "#fff",
+                border: "none", borderRadius: 11, padding: "10px 16px", fontWeight: 700, fontSize: 13.5, cursor: "pointer",
+              }}
+            >
+              <Send size={14} /> Submit
+            </button>
+          </div>
+        </div>
+      )}
+
+      {tickets.length === 0 ? (
+        <div style={{ background: "#F7F8FC", border: `1px solid ${COLORS.line}`, borderRadius: 12, padding: "18px 16px", textAlign: "center", color: COLORS.muted, fontSize: 12.5 }}>
+          No tickets raised yet.
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {tickets.map(t => (
+            <div key={t.id} style={{ border: `1px solid ${COLORS.line}`, borderRadius: 10, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.navy }}>{t.subject}</div>
+                <div style={{ fontSize: 11.5, color: COLORS.muted, marginTop: 2 }}>
+                  {t.category} · {new Date(t.createdAt).toLocaleDateString([], { month: "short", day: "numeric" })}
+                </div>
+              </div>
+              <span style={{
+                fontSize: 11.5, fontWeight: 700, padding: "3px 10px", borderRadius: 999,
+                background: "#FBF0DC", color: "#8A5D14",
+              }}>
+                Open
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
