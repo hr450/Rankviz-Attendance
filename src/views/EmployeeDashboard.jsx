@@ -7,10 +7,21 @@ import HelpModal from "../components/HelpModal";
 
 /* Time-of-day icon + tone, used instead of an emoji wave */
 function greetingIcon(hour) {
-  if (hour < 12) return { Icon: Sun, tone: "#D99A2B", bg: "#FBF0DC" };
-  if (hour < 18) return { Icon: CloudSun, tone: "#2F6FED", bg: "#E7EEFF" };
-  return { Icon: Moon, tone: "#5E6B85", bg: "#EDEFF5" };
+  if (hour < 12) return { Icon: Sun, tone: "#F0B23D", bg: "#FBF0DC" };
+  if (hour < 18) return { Icon: CloudSun, tone: "#5B9CFF", bg: "#E7EEFF" };
+  return { Icon: Moon, tone: "#9AA6C7", bg: "#EDEFF5" };
 }
+
+/* Dark-mode palette for this page's content area, layered on top of the
+   shared light-mode COLORS constants so the rest of the app is untouched. */
+const DARK = {
+  pageBg: "#0B1224",
+  card: "#141B33",
+  cardBorder: "rgba(255,255,255,0.06)",
+  ink: "#F3F5FA",
+  muted: "#8992B3",
+  line: "rgba(255,255,255,0.07)",
+};
 
 /* Local styles for the subtle motion on this page only — kept scoped
    so it doesn't leak into the rest of the app. */
@@ -39,6 +50,10 @@ function DashboardStyles() {
       .rv-row:hover { background: #F5F7FC; }
       .rv-sidebar-item { transition: background .15s ease, color .15s ease; }
       .rv-sidebar-item:not(.rv-active):hover { background: rgba(255,255,255,0.08) !important; color: #fff; }
+
+      .rv-dark-card { background: ${DARK.card} !important; border: 1px solid ${DARK.cardBorder} !important; color: ${DARK.ink}; }
+      .rv-dark-row { border-bottom: 1px solid ${DARK.line} !important; }
+      .rv-dark-row:hover { background: rgba(255,255,255,0.03) !important; }
     `}</style>
   );
 }
@@ -51,39 +66,122 @@ const SIDEBAR_ITEMS = [
   { key: "alternate", label: "Alternate days", icon: Repeat },
 ];
 
-function Sidebar({ tab, setTab }) {
+function Sidebar({ tab, setTab, employee, onHelp, onLogout }) {
   const isMobile = typeof window !== "undefined" && window.innerWidth < 720;
+  const initial = employee.name ? employee.name.trim()[0].toUpperCase() : "?";
+
+  if (isMobile) {
+    return (
+      <div style={{
+        display: "flex", alignItems: "center", gap: 10,
+        backgroundImage: `url(${SIDEBAR_BG})`, backgroundSize: "cover", backgroundPosition: "center",
+        padding: 10, boxShadow: "0 4px 14px rgba(15,27,51,0.3)",
+      }}>
+        <LogoMark size={26} />
+        <div style={{ display: "flex", gap: 6, overflowX: "auto", flex: 1 }}>
+          {SIDEBAR_ITEMS.map(it => {
+            const active = tab === it.key;
+            return (
+              <button
+                key={it.key}
+                className={`rv-sidebar-item${active ? " rv-active" : ""}`}
+                onClick={() => setTab(it.key)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 8, whiteSpace: "nowrap",
+                  padding: "8px 12px", borderRadius: 10, border: "none", cursor: "pointer",
+                  background: active ? "#fff" : "transparent",
+                  color: active ? COLORS.navy : "#CBD5F5",
+                  fontWeight: active ? 800 : 600, fontSize: 13, flexShrink: 0,
+                }}
+              >
+                <it.icon size={16} /> {it.label}
+              </button>
+            );
+          })}
+        </div>
+        <button onClick={onLogout} title="Log out" style={{ ...topIconBtn, flexShrink: 0 }}><SignOut size={16} /></button>
+      </div>
+    );
+  }
+
   return (
     <div style={{
-      display: "flex", flexDirection: isMobile ? "row" : "column", gap: 6,
-      width: isMobile ? "100%" : 230, flexShrink: 0,
-      overflowX: isMobile ? "auto" : "visible",
-      minHeight: isMobile ? "auto" : "100vh",
-      position: isMobile ? "static" : "sticky", top: 0,
+      display: "flex", flexDirection: "column", width: 240, flexShrink: 0,
+      minHeight: "100vh", position: "sticky", top: 0,
       backgroundImage: `url(${SIDEBAR_BG})`, backgroundSize: "cover", backgroundPosition: "center",
-      padding: isMobile ? 10 : "22px 14px",
-      boxShadow: isMobile ? "0 4px 14px rgba(15,27,51,0.3)" : "4px 0 24px -10px rgba(15,27,51,0.5)",
+      padding: "22px 16px", boxShadow: "4px 0 24px -10px rgba(15,27,51,0.5)",
     }}>
-      {SIDEBAR_ITEMS.map(it => {
-        const active = tab === it.key;
-        return (
-          <button
-            key={it.key}
-            className={`rv-sidebar-item${active ? " rv-active" : ""}`}
-            onClick={() => setTab(it.key)}
-            style={{
-              display: "flex", alignItems: "center", gap: 10, whiteSpace: "nowrap",
-              padding: "10px 14px", borderRadius: 10, border: "none", cursor: "pointer",
-              background: active ? "#fff" : "transparent",
-              color: active ? COLORS.navy : "#CBD5F5",
-              fontWeight: active ? 800 : 600, fontSize: 13.5, textAlign: "left",
-              boxShadow: active ? "0 4px 12px -4px rgba(0,0,0,0.25)" : "none",
-            }}
-          >
-            <it.icon size={17} /> {it.label}
-          </button>
-        );
-      })}
+      <div style={{ marginBottom: 22, paddingLeft: 4 }}>
+        <LogoMark size={30} />
+      </div>
+
+      <div style={{
+        display: "flex", alignItems: "center", gap: 10,
+        background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.14)",
+        borderRadius: 12, padding: "9px 12px", marginBottom: 22,
+      }}>
+        <div style={{
+          width: 34, height: 34, borderRadius: "50%", background: COLORS.blue, color: "#fff",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontWeight: 800, fontSize: 14, flexShrink: 0,
+        }}>
+          {initial}
+        </div>
+        <div style={{ lineHeight: 1.25, minWidth: 0 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 800, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{employee.name}</div>
+          <div style={{ fontSize: 11, color: "#B9C3E8", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{employee.department}</div>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {SIDEBAR_ITEMS.map(it => {
+          const active = tab === it.key;
+          return (
+            <button
+              key={it.key}
+              className={`rv-sidebar-item${active ? " rv-active" : ""}`}
+              onClick={() => setTab(it.key)}
+              style={{
+                display: "flex", alignItems: "center", gap: 10, whiteSpace: "nowrap",
+                padding: "10px 14px", borderRadius: 10, border: "none", cursor: "pointer",
+                background: active ? "#fff" : "transparent",
+                color: active ? COLORS.navy : "#CBD5F5",
+                fontWeight: active ? 800 : 600, fontSize: 13.5, textAlign: "left",
+                boxShadow: active ? "0 4px 12px -4px rgba(0,0,0,0.25)" : "none",
+              }}
+            >
+              <it.icon size={17} /> {it.label}
+            </button>
+          );
+        })}
+      </div>
+
+      <div style={{ flex: 1 }} />
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingTop: 14, borderTop: "1px solid rgba(255,255,255,0.1)" }}>
+        <button
+          className="rv-sidebar-item"
+          onClick={onHelp}
+          style={{
+            display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 10,
+            border: "none", cursor: "pointer", background: "transparent", color: "#CBD5F5",
+            fontWeight: 600, fontSize: 13.5, textAlign: "left",
+          }}
+        >
+          <HelpCircle size={17} /> Help
+        </button>
+        <button
+          className="rv-sidebar-item"
+          onClick={onLogout}
+          style={{
+            display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 10,
+            border: "none", cursor: "pointer", background: "transparent", color: "#CBD5F5",
+            fontWeight: 600, fontSize: 13.5, textAlign: "left",
+          }}
+        >
+          <SignOut size={17} /> Log out
+        </button>
+      </div>
     </div>
   );
 }
@@ -126,32 +224,31 @@ export default function EmployeeDashboard({ employee, attendance, punch, now, on
     <div style={{
       minHeight: "100vh", display: "flex",
       flexDirection: typeof window !== "undefined" && window.innerWidth < 720 ? "column" : "row",
-      background: `linear-gradient(180deg, ${COLORS.bg}, #EAEFFB)`,
+      background: DARK.pageBg,
     }}>
       <DashboardStyles />
-      <Sidebar tab={tab} setTab={setTab} />
+      <Sidebar tab={tab} setTab={setTab} employee={employee} onHelp={() => setShowHelp(true)} onLogout={onLogout} />
 
       <div style={{ flex: 1, minWidth: 0 }}>
-        <TopBar employee={employee} onHelp={() => setShowHelp(true)} onLogout={onLogout} />
-
-        <div style={{ maxWidth: 960, margin: "0 auto", padding: "26px 18px 60px" }}>
+        <div style={{ maxWidth: 960, margin: "0 auto", padding: "30px 24px 60px" }}>
         <div className="rv-stagger rv-stagger-1" style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
           <div
             className={`rv-greeting-badge${isLive ? " rv-live" : ""}`}
             style={{
               width: 40, height: 40, borderRadius: "50%", flexShrink: 0,
-              background: greet.bg, color: greet.tone,
+              background: "rgba(255,255,255,0.06)", color: greet.tone,
               display: "flex", alignItems: "center", justifyContent: "center",
+              border: "1px solid rgba(255,255,255,0.1)",
             }}
           >
             <greet.Icon size={20} />
           </div>
           <div>
-            <h1 style={{ fontSize: 28, fontWeight: 800, margin: 0, letterSpacing: -0.3 }}>
+            <h1 style={{ fontSize: 28, fontWeight: 800, margin: 0, letterSpacing: -0.3, color: DARK.ink }}>
               Hi, {employee.name.split(" ")[0]}
             </h1>
-            <p style={{ color: COLORS.muted, margin: "2px 0 0", fontSize: 14, display: "flex", alignItems: "center", gap: 6 }}>
-              {isLive && <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#2F9E6E", flexShrink: 0 }} />}
+            <p style={{ color: DARK.muted, margin: "2px 0 0", fontSize: 14, display: "flex", alignItems: "center", gap: 6 }}>
+              {isLive && <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#3DD68C", flexShrink: 0 }} />}
               {now.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" })}
             </p>
           </div>
@@ -160,9 +257,9 @@ export default function EmployeeDashboard({ employee, attendance, punch, now, on
         <div>
             {tab === "attendance" && (
               <>
-                <div key={date} className="rv-card rv-anim-slideupin rv-stagger rv-stagger-2" style={{ padding: 24, marginBottom: 22 }}>
+                <div key={date} className="rv-card rv-dark-card rv-anim-slideupin rv-stagger rv-stagger-2" style={{ padding: 24, marginBottom: 22, borderRadius: 16 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-                    <div style={{ fontWeight: 800, fontSize: 17 }}>Today's attendance</div>
+                    <div style={{ fontWeight: 800, fontSize: 17, color: DARK.ink }}>Today's attendance</div>
                     <StatusPill {...status} />
                   </div>
 
@@ -258,42 +355,6 @@ export default function EmployeeDashboard({ employee, attendance, punch, now, on
   );
 }
 
-function TopBar({ employee, onHelp, onLogout }) {
-  const initial = employee.name ? employee.name.trim()[0].toUpperCase() : "?";
-  const isMobile = typeof window !== "undefined" && window.innerWidth < 480;
-  return (
-    <div style={{
-      position: "sticky", top: 0, zIndex: 30, background: COLORS.navy, color: "#fff",
-      padding: "12px 18px", display: "flex", alignItems: "center", justifyContent: "space-between",
-      boxShadow: "0 2px 12px rgba(0,0,0,0.15)",
-    }}>
-      <LogoMark size={30} />
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <div style={{
-          display: "flex", alignItems: "center", gap: 9,
-          background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)",
-          borderRadius: 12, padding: isMobile ? 4 : "5px 12px 5px 5px",
-        }}>
-          <div style={{
-            width: 28, height: 28, borderRadius: "50%", background: COLORS.blue, color: "#fff",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontWeight: 800, fontSize: 12.5, flexShrink: 0,
-          }}>
-            {initial}
-          </div>
-          {!isMobile && (
-            <div style={{ lineHeight: 1.25 }}>
-              <div style={{ fontSize: 13, fontWeight: 800, color: "#fff" }}>{employee.name}</div>
-              <div style={{ fontSize: 11, color: "#B9C3E8", fontWeight: 600 }}>{employee.department}</div>
-            </div>
-          )}
-        </div>
-        <button onClick={onHelp} title="Help" style={topIconBtn}><HelpCircle size={17} /></button>
-        <button onClick={onLogout} title="Log out" style={topIconBtn}><SignOut size={17} /></button>
-      </div>
-    </div>
-  );
-}
 const topIconBtn = {
   width: 34, height: 34, borderRadius: 9, border: "1px solid rgba(255,255,255,0.15)",
   background: "rgba(255,255,255,0.06)", color: "#fff", display: "flex", alignItems: "center",
@@ -303,8 +364,8 @@ const topIconBtn = {
 function TimeStat({ label, value, alert }) {
   return (
     <div>
-      <div style={{ fontSize: 11.5, color: COLORS.muted, fontWeight: 700, letterSpacing: 0.3, textTransform: "uppercase" }}>{label}</div>
-      <div style={{ fontSize: 18, fontWeight: 800, color: alert ? COLORS.red : COLORS.ink }}>{value}</div>
+      <div style={{ fontSize: 11.5, color: DARK.muted, fontWeight: 700, letterSpacing: 0.3, textTransform: "uppercase" }}>{label}</div>
+      <div style={{ fontSize: 18, fontWeight: 800, color: alert ? "#FF6B6B" : DARK.ink }}>{value}</div>
     </div>
   );
 }
@@ -317,9 +378,10 @@ const TONE_BG = {
 function CtaButton({ icon: Icon, label, tone, disabled, onClick }) {
   return (
     <button className="rv-cta rv-cta2" onClick={onClick} disabled={disabled} style={{
-      background: disabled ? "#E9ECF6" : TONE_BG[tone],
-      color: disabled ? COLORS.muted : "#fff",
-      boxShadow: disabled ? "none" : "0 8px 20px -6px rgba(15,27,51,0.35)",
+      background: disabled ? "rgba(255,255,255,0.05)" : TONE_BG[tone],
+      color: disabled ? DARK.muted : "#fff",
+      border: disabled ? "1px solid rgba(255,255,255,0.06)" : "none",
+      boxShadow: disabled ? "none" : "0 8px 20px -6px rgba(0,0,0,0.5)",
     }}>
       <Icon size={22} />
       {label}
@@ -356,20 +418,20 @@ function RecentActivity({ employee, attendance, now }) {
 
   return (
     <div className="rv-stagger rv-stagger-4" style={{ marginTop: 26 }}>
-      <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 10 }}>Recent activity</div>
-      <div className="rv-card" style={{ padding: "6px 4px" }}>
+      <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 10, color: DARK.ink }}>Recent activity</div>
+      <div className="rv-card rv-dark-card" style={{ padding: "6px 4px", borderRadius: 16 }}>
         {days.map(date => {
           const rec = attendance[`${employee.id}|${date}`];
           const status = computeStatus(employee, rec, date < todayStr(now), now.getHours() * 60 + now.getMinutes());
           return (
-            <div key={date} className="rv-row" style={{
+            <div key={date} className="rv-row rv-dark-row" style={{
               display: "flex", justifyContent: "space-between", alignItems: "center",
-              padding: "11px 16px", borderBottom: `1px solid ${COLORS.line}`, borderRadius: 8,
+              padding: "11px 16px", borderRadius: 8,
             }}>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 9, fontSize: 13, color: COLORS.muted, fontWeight: 600 }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 9, fontSize: 13, color: DARK.muted, fontWeight: 600 }}>
                 <span style={{
                   width: 7, height: 7, borderRadius: "50%", flexShrink: 0,
-                  background: DOT_COLOR[status?.tone] || COLORS.muted,
+                  background: DOT_COLOR[status?.tone] || DARK.muted,
                 }} />
                 {new Date(date + "T00:00:00").toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}
               </span>
@@ -391,25 +453,25 @@ const LEAVE_STATUS_STYLE = {
 function MyLeaveRequestsFull({ leaveRequests }) {
   return (
     <div>
-      <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 10, display: "flex", alignItems: "center", gap: 7 }}>
+      <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 10, display: "flex", alignItems: "center", gap: 7, color: DARK.ink }}>
         <Clock size={15} color={COLORS.amber} /> My leave requests
       </div>
       {(!leaveRequests || leaveRequests.length === 0) ? (
-        <div className="rv-card" style={{ padding: "28px 20px", textAlign: "center", color: COLORS.muted, fontSize: 13.5 }}>
+        <div className="rv-card rv-dark-card" style={{ padding: "28px 20px", textAlign: "center", color: DARK.muted, fontSize: 13.5, borderRadius: 16 }}>
           No leave requests yet — use "Apply for leave" above when you need one.
         </div>
       ) : (
-        <div className="rv-card" style={{ padding: "6px 4px" }}>
+        <div className="rv-card rv-dark-card" style={{ padding: "6px 4px", borderRadius: 16 }}>
           {leaveRequests.map(r => {
             const s = LEAVE_STATUS_STYLE[r.status] || LEAVE_STATUS_STYLE.pending;
             return (
-              <div key={r.id} className="rv-row" style={{
+              <div key={r.id} className="rv-row rv-dark-row" style={{
                 display: "flex", justifyContent: "space-between", alignItems: "center",
-                padding: "11px 16px", borderBottom: `1px solid ${COLORS.line}`, gap: 10, flexWrap: "wrap", borderRadius: 8,
+                padding: "11px 16px", gap: 10, flexWrap: "wrap", borderRadius: 8,
               }}>
                 <div>
-                  <div style={{ fontWeight: 700, fontSize: 13.5 }}>{r.leaveTypeName}</div>
-                  <div style={{ fontSize: 12, color: COLORS.muted }}>
+                  <div style={{ fontWeight: 700, fontSize: 13.5, color: DARK.ink }}>{r.leaveTypeName}</div>
+                  <div style={{ fontSize: 12, color: DARK.muted }}>
                     {new Date(r.startDate + "T00:00:00").toLocaleDateString([], { month: "short", day: "numeric" })}
                     {" – "}
                     {new Date(r.endDate + "T00:00:00").toLocaleDateString([], { month: "short", day: "numeric" })}
@@ -438,36 +500,36 @@ function AlternateDayLog({ employee, attendance }) {
 
   return (
     <div>
-      <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 10 }}>Alternate day record</div>
+      <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 10, color: DARK.ink }}>Alternate day record</div>
       {entries.length === 0 ? (
-        <div className="rv-card" style={{ padding: "28px 20px", textAlign: "center", color: COLORS.muted, fontSize: 13.5 }}>
+        <div className="rv-card rv-dark-card" style={{ padding: "28px 20px", textAlign: "center", color: DARK.muted, fontSize: 13.5, borderRadius: 16 }}>
           No alternate days marked yet.
         </div>
       ) : (
-        <div className="rv-card" style={{ padding: "6px 4px" }}>
+        <div className="rv-card rv-dark-card" style={{ padding: "6px 4px", borderRadius: 16 }}>
           {entries.map(({ date, rec }) => {
             const checkIn = rec.checkIn || rec.wfhCheckIn;
             const checkOut = rec.checkOut || rec.wfhCheckOut;
             const isWfh = !!rec.wfhCheckIn;
             const hrs = (checkIn && checkOut) ? (new Date(checkOut) - new Date(checkIn)) / 3600000 : null;
             return (
-              <div key={date} className="rv-row" style={{
+              <div key={date} className="rv-row rv-dark-row" style={{
                 display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8,
-                padding: "11px 16px", borderBottom: `1px solid ${COLORS.line}`, borderRadius: 8,
+                padding: "11px 16px", borderRadius: 8,
               }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
                   <span style={{ width: 7, height: 7, borderRadius: "50%", background: COLORS.violet, flexShrink: 0 }} />
-                  <span style={{ fontSize: 13, fontWeight: 700 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: DARK.ink }}>
                     {new Date(date + "T00:00:00").toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}
                   </span>
                   {isWfh && (
-                    <span style={{ fontSize: 11, color: COLORS.blue, fontWeight: 700, background: "#E7EEFF", padding: "2px 8px", borderRadius: 999 }}>WFH</span>
+                    <span style={{ fontSize: 11, color: "#5B9CFF", fontWeight: 700, background: "rgba(91,156,255,0.12)", padding: "2px 8px", borderRadius: 999 }}>WFH</span>
                   )}
                 </div>
-                <div style={{ display: "flex", gap: 16, fontSize: 12.5, color: COLORS.muted }}>
-                  <span>In: <strong style={{ color: COLORS.ink }}>{fmtTime(checkIn) || "—"}</strong></span>
-                  <span>Out: <strong style={{ color: COLORS.ink }}>{fmtTime(checkOut) || "—"}</strong></span>
-                  {hrs != null && <span>Hours: <strong style={{ color: COLORS.ink }}>{fmtHrs(hrs)}</strong></span>}
+                <div style={{ display: "flex", gap: 16, fontSize: 12.5, color: DARK.muted }}>
+                  <span>In: <strong style={{ color: DARK.ink }}>{fmtTime(checkIn) || "—"}</strong></span>
+                  <span>Out: <strong style={{ color: DARK.ink }}>{fmtTime(checkOut) || "—"}</strong></span>
+                  {hrs != null && <span>Hours: <strong style={{ color: DARK.ink }}>{fmtHrs(hrs)}</strong></span>}
                 </div>
               </div>
             );
