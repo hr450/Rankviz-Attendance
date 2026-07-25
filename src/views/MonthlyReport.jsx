@@ -47,7 +47,16 @@ function isFlaggedNotARealCheckIn(rec) {
 // instead of 9h18m when there was also a 3h WFH session that same day).
 function sessionHours(inT, outT) {
   if (!inT || !outT) return 0;
-  const ms = new Date(outT) - new Date(inT);
+  const inD = new Date(inT), outD = new Date(outT);
+  let ms = outD - inD;
+  // Overnight sessions (e.g. a WFH night shift starting before midnight and
+  // ending after it) can end up with a checkout that reads "earlier" than
+  // check-in once you compare raw timestamps, if the day only rolled over on
+  // the clock and not in how the record's date was stored — that produced a
+  // negative diff and silently showed 0h. Auto-correct: a negative diff
+  // within one calendar day (up to -24h) is treated as crossing midnight and
+  // gets +24h, instead of requiring a manual hours override every time.
+  if (ms <= 0 && ms > -24 * 3600000) ms += 24 * 3600000;
   return ms > 0 ? ms / 3600000 : 0;
 }
 function totalWorkedHours(rec) {
