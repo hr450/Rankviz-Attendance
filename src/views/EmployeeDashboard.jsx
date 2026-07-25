@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { LogIn, LogOut, Home, Coffee, HelpCircle, LogOut as SignOut, Repeat, MapPin, X, Check, CalendarPlus, Clock, Sun, Moon, CloudSun, ListChecks, WifiOff, Pencil, ChevronDown } from "lucide-react";
 import { COLORS } from "../lib/constants";
 import { computeStatus, fmtTime, fmtHrs, todayStr } from "../lib/utils";
@@ -578,6 +578,14 @@ function PunchErrorBanner({ message }) {
 
 function RecentActivity({ employee, attendance, now }) {
   const [showAll, setShowAll] = useState(false);
+  const panelRef = useRef(null);
+
+  // Always land at the top of the list when opening — without this, the
+  // browser can preserve/adjust scroll position from before the panel had
+  // any height, landing you mid-list instead of at day one.
+  useEffect(() => {
+    if (showAll && panelRef.current) panelRef.current.scrollTop = 0;
+  }, [showAll]);
 
   // Every day from the 1st of the current month through today, most recent
   // first. Recomputed on every render from `now`/`attendance`, so a punch
@@ -643,11 +651,13 @@ function RecentActivity({ employee, attendance, now }) {
 
         {extraCount > 0 && (
           <div
+            ref={panelRef}
             className="rv-expand-panel"
             style={{
               maxHeight: showAll ? 340 : 0,
               overflowY: showAll ? "auto" : "hidden",
               overflowX: "hidden",
+              overflowAnchor: "none",
               transition: "max-height .4s ease",
             }}
           >
