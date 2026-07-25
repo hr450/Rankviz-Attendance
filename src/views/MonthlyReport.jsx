@@ -166,15 +166,19 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
 
       <div className="rv-card" style={{ padding: "16px 20px", overflowX: "auto" }}>
         <h3 style={{ margin: "0 0 12px", fontSize: 15, fontWeight: 700 }}>Full attendance — {emp.name}</h3>
-        <table className="rv-table-hover" style={{ width: "100%", borderCollapse: "collapse", minWidth: 760 }}>
+        <table className="rv-table-hover" style={{ width: "100%", borderCollapse: "collapse", minWidth: 940 }}>
           <thead>
             <tr style={{ color: COLORS.muted, fontSize: 12.5, textAlign: "left" }}>
               <th style={th}>Date</th><th style={th}>Status</th><th style={th}>Check-in</th>
-              <th style={th}>Check-out</th><th style={th}>WFH in</th><th style={th}>WFH out</th><th style={th}>Total Hours</th><th style={th}>Notes</th><th style={th}>Status-Edit</th><th style={th}></th>
+              <th style={th}>Check-out</th><th style={th}>Office Hours</th>
+              <th style={th}>WFH in</th><th style={th}>WFH out</th><th style={th}>WFH Hours</th>
+              <th style={th}>Total Hours</th><th style={th}>Notes</th><th style={th}>Status-Edit</th><th style={th}></th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r, i) => {
+              const officeHours = sessionHours(r.rec?.checkIn, r.rec?.checkOut);
+              const wfhHours = sessionHours(r.rec?.wfhCheckIn, r.rec?.wfhCheckOut);
               const dayHours = totalWorkedHours(r.rec);
               const hours = hasAnySession(r.rec) ? dayHours : null;
               const missedCheckout = (r.rec?.checkIn && !r.rec?.checkOut) || (r.rec?.wfhCheckIn && !r.rec?.wfhCheckOut);
@@ -191,11 +195,17 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
                       ? `${fmtTime(r.rec.checkIn)} (likely checkout — no check-in recorded)`
                       : r.rec?.checkIn ? (r.rec?.checkOut ? fmtTime(r.rec.checkOut) : "No checkout") : "—"}
                   </td>
+                  <td style={{ ...td, color: COLORS.muted }}>
+                    {(r.rec?.checkIn && r.rec?.checkOut) ? fmtHrs(officeHours) : "—"}
+                  </td>
                   <td style={{ ...td, color: COLORS.muted }}>{fmtTime(r.rec?.wfhCheckIn)}</td>
                   <td style={{ ...td, color: missedCheckout ? COLORS.red : COLORS.muted, fontWeight: missedCheckout ? 700 : 400 }}>
                     {r.rec?.wfhCheckIn ? (r.rec?.wfhCheckOut ? fmtTime(r.rec.wfhCheckOut) : "No checkout") : "—"}
                   </td>
-                  <td style={{ ...td, color: COLORS.muted }}>{hours != null ? fmtHrs(hours) : "—"}</td>
+                  <td style={{ ...td, color: COLORS.muted }}>
+                    {(r.rec?.wfhCheckIn && r.rec?.wfhCheckOut) ? fmtHrs(wfhHours) : "—"}
+                  </td>
+                  <td style={{ ...td, color: COLORS.muted, fontWeight: 700 }}>{hours != null ? fmtHrs(hours) : "—"}</td>
                   <td style={td}>
                     {holidayByDate[r.date] && (
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "#B2650A", fontWeight: 700, fontSize: 12 }}>
@@ -257,7 +267,7 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
               );
             })}
             {rows.length === 0 && (
-              <tr><td colSpan={10} style={{ ...td, color: COLORS.muted, textAlign: "center", padding: "26px 0" }}>No records this month yet.</td></tr>
+              <tr><td colSpan={12} style={{ ...td, color: COLORS.muted, textAlign: "center", padding: "26px 0" }}>No records this month yet.</td></tr>
             )}
           </tbody>
         </table>
