@@ -152,12 +152,18 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
       else if (code === "SL") sl++;
       else if (code === "AL") al++;
       else if (code === "ShortLeave") shortLeave++;
-      const dayHours = r.rec?.manualTotalHours != null ? r.rec.manualTotalHours : totalWorkedHours(r.rec);
+      const rawDayHours = r.rec?.manualTotalHours != null ? r.rec.manualTotalHours : totalWorkedHours(r.rec);
+      // Guard against any legacy/corrupted manualTotalHours value (e.g. a
+      // non-numeric string saved before the Status-Edit validation existed)
+      // — coerce to a real number first so a single bad record can never
+      // poison the running total or the average calculation.
+      const dayHours = Number.isFinite(Number(rawDayHours)) ? Number(rawDayHours) : 0;
       if (dayHours > 0) { totalHours += dayHours; workedDays++; }
     });
     const markedDays = present + half + noCheckout + wfh + absent;
     const attendancePct = markedDays ? Math.round(((present + half + wfh) / markedDays) * 100) : null;
-    return { present, late, half, noCheckout, wfh, leave, absent, shortLeave, cl, sl, al, avgHours: workedDays ? totalHours / workedDays : 0, attendancePct };
+    const avgHours = workedDays && Number.isFinite(totalHours / workedDays) ? totalHours / workedDays : 0;
+    return { present, late, half, noCheckout, wfh, leave, absent, shortLeave, cl, sl, al, avgHours, attendancePct };
   }, [rows]);
 
   // Status-Edit dropdown — lets HR override the auto-calculated status for
