@@ -5,6 +5,43 @@ import { computeStatus, fmtTime, fmtHrs, todayStr } from "../lib/utils";
 import { StatusPill, LogoMark, Field, inputStyle, secondaryBtn } from "../components/ui";
 import HelpModal from "../components/HelpModal";
 
+/* --- Mirrors the HR monthly report's own calculations (MonthlyReport.jsx)
+   so an employee's "Today" / "Recent activity" numbers always match what
+   HR sees for the same records — same session math, same auto-flag and
+   manual-override handling. Kept in sync with that file on purpose. --- */
+function sessionHours(inT, outT) {
+  if (!inT || !outT) return 0;
+  const inD = new Date(inT), outD = new Date(outT);
+  let ms = outD - inD;
+  // Overnight sessions can read as a negative diff if the day only rolled
+  // over on the clock, not in how the record's date was stored — treat any
+  // negative diff within one calendar day as crossing midnight.
+  if (ms <= 0 && ms > -24 * 3600000) ms += 24 * 3600000;
+  return ms > 0 ? ms / 3600000 : 0;
+}
+function totalWorkedHours(rec) {
+  if (!rec) return 0;
+  return (
+    sessionHours(rec.checkIn, rec.checkOut) +
+    sessionHours(rec.wfhCheckIn, rec.wfhCheckOut) +
+    sessionHours(rec.secondCheckIn, rec.secondCheckOut)
+  );
+}
+// A lone punch landing well after shift end (with no earlier punch that
+// day) gets auto-flagged by the backend and stored in check_in even
+// though it's really a missed check-in — show "No check-in" for it
+// instead of presenting the evening time as an arrival.
+function isFlaggedNotARealCheckIn(rec) {
+  return !!(rec?.notes && rec.notes.startsWith("Auto-flag:") && rec?.checkIn && !rec?.checkOut);
+}
+// The day's total, respecting HR's manual override the same way the
+// monthly report does, and falling back to the actual session math.
+function dayHoursFor(rec) {
+  const raw = rec?.manualTotalHours != null ? rec.manualTotalHours : totalWorkedHours(rec);
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : 0;
+}
+
 /* Time-of-day icon + tone, used instead of an emoji wave */
 function greetingIcon(hour) {
   if (hour < 12) return { Icon: Sun, tone: "#F0B23D", bg: "#FBF0DC" };
@@ -233,10 +270,10 @@ export default function EmployeeDashboard({ employee, attendance, punch, now, on
   const date = todayStr(now);
   const rec = attendance[`${employee.id}|${date}`];
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
-  const status = computeStatus(employee, rec, false, nowMinutes);
+  const status = computeStatus(employee, rec, false, nowMinutes, date);
 
-  const hours = (rec?.checkIn && rec?.checkOut) ? (new Date(rec.checkOut) - new Date(rec.checkIn)) / 3600000
-    : (rec?.wfhCheckIn && rec?.wfhCheckOut) ? (new Date(rec.wfhCheckOut) - new Date(rec.wfhCheckIn)) / 3600000 : null;
+  const completeSession = (rec?.checkIn && rec?.checkOut) || (rec?.wfhCheckIn && rec?.wfhCheckOut) || (rec?.secondCheckIn && rec?.secondCheckOut);
+  const hours = rec?.manualTotalHours != null ? Number(rec.manualTotalHours) : (completeSession ? totalWorkedHours(rec) : null);
 
   const canCheckIn = !rec?.checkIn && !rec?.wfhCheckIn;
   const canCheckOut = !!rec?.checkIn && !rec?.checkOut;
@@ -255,8 +292,8 @@ export default function EmployeeDashboard({ employee, attendance, punch, now, on
       <DashboardStyles />
       <Sidebar tab={tab} setTab={setTab} employee={displayEmployee} onHelp={() => setShowHelp(true)} onLogout={onLogout} onEditProfile={() => setEditProfileModal(true)} />
 
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ maxWidth: 960, margin: "0 auto", padding: "30px 24px 60px" }}>
+      <div style={{ flex: 1, minWidth: 0, padding: "0 32px" }}>
+        <div style={{ maxWidth: 960, margin: "0 auto", padding: "30px 0 60px" }}>
         <div className="rv-stagger rv-stagger-1" style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
           <div
             className={`rv-greeting-badge${isLive ? " rv-live" : ""}`}
@@ -290,7 +327,7 @@ export default function EmployeeDashboard({ employee, attendance, punch, now, on
                   </div>
 
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 22, marginBottom: 4 }}>
-                    <TimeStat label="Check-in" value={fmtTime(rec?.checkIn)} />
+                    <TimeStat label="Check-in" value={isFlaggedNotARealCheckIn(rec) ? "No check-in" : fmtTime(rec?.checkIn)} alert={isFlaggedNotARealCheckIn(rec)} />
                     <TimeStat label="Check-out" value={rec?.checkIn && !rec?.checkOut ? "No checkout" : fmtTime(rec?.checkOut)} alert={rec?.checkIn && !rec?.checkOut} />
                     <TimeStat label="WFH in" value={fmtTime(rec?.wfhCheckIn)} />
                     <TimeStat label="WFH out" value={rec?.wfhCheckIn && !rec?.wfhCheckOut ? "No checkout" : fmtTime(rec?.wfhCheckOut)} alert={rec?.wfhCheckIn && !rec?.wfhCheckOut} />
@@ -460,19 +497,36 @@ function RecentActivity({ employee, attendance, now }) {
       <div className="rv-card rv-dark-card" style={{ padding: "6px 4px", borderRadius: 16 }}>
         {days.map(date => {
           const rec = attendance[`${employee.id}|${date}`];
-          const status = computeStatus(employee, rec, date < todayStr(now), now.getHours() * 60 + now.getMinutes());
+          const isPast = date < todayStr(now);
+          const status = computeStatus(employee, rec, isPast, now.getHours() * 60 + now.getMinutes(), date);
+          const flaggedIn = isFlaggedNotARealCheckIn(rec);
+          const inTime = flaggedIn ? "No check-in" : (fmtTime(rec?.checkIn) || fmtTime(rec?.wfhCheckIn));
+          const outTime = (rec?.checkIn && !rec?.checkOut) || (rec?.wfhCheckIn && !rec?.wfhCheckOut)
+            ? "No checkout" : (fmtTime(rec?.checkOut) || fmtTime(rec?.wfhCheckOut));
+          const hasTimes = (inTime && inTime !== "No check-in") || outTime;
+          const dayHours = dayHoursFor(rec);
           return (
             <div key={date} className="rv-row rv-dark-row" style={{
               display: "flex", justifyContent: "space-between", alignItems: "center",
-              padding: "11px 16px", borderRadius: 8,
+              padding: "11px 16px", gap: 10, flexWrap: "wrap", borderRadius: 8,
             }}>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 9, fontSize: 13, color: DARK.muted, fontWeight: 600 }}>
-                <span style={{
-                  width: 7, height: 7, borderRadius: "50%", flexShrink: 0,
-                  background: DOT_COLOR[status?.tone] || DARK.muted,
-                }} />
-                {new Date(date + "T00:00:00").toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}
-              </span>
+              <div>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 9, fontSize: 13, color: DARK.ink, fontWeight: 700 }}>
+                  <span style={{
+                    width: 7, height: 7, borderRadius: "50%", flexShrink: 0,
+                    background: DOT_COLOR[status?.tone] || DARK.muted,
+                  }} />
+                  {new Date(date + "T00:00:00").toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}
+                </span>
+                {(hasTimes || flaggedIn) && (
+                  <div style={{ fontSize: 12, color: DARK.muted, marginTop: 2, marginLeft: 16 }}>
+                    In: <strong style={{ color: flaggedIn ? COLORS.red : DARK.ink }}>{inTime || "—"}</strong>
+                    {"  ·  "}
+                    Out: <strong style={{ color: outTime === "No checkout" ? COLORS.red : DARK.ink }}>{outTime || "—"}</strong>
+                    {dayHours > 0 && <> {"  ·  "}Hours: <strong style={{ color: DARK.ink }}>{fmtHrs(dayHours)}</strong></>}
+                  </div>
+                )}
+              </div>
               <StatusPill {...status} />
             </div>
           );
@@ -546,10 +600,11 @@ function AlternateDayLog({ employee, attendance }) {
       ) : (
         <div className="rv-card rv-dark-card" style={{ padding: "6px 4px", borderRadius: 16 }}>
           {entries.map(({ date, rec }) => {
-            const checkIn = rec.checkIn || rec.wfhCheckIn;
+            const flaggedIn = isFlaggedNotARealCheckIn(rec);
+            const checkIn = flaggedIn ? null : (rec.checkIn || rec.wfhCheckIn);
             const checkOut = rec.checkOut || rec.wfhCheckOut;
             const isWfh = !!rec.wfhCheckIn;
-            const hrs = (checkIn && checkOut) ? (new Date(checkOut) - new Date(checkIn)) / 3600000 : null;
+            const dayHours = dayHoursFor(rec);
             return (
               <div key={date} className="rv-row rv-dark-row" style={{
                 display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8,
@@ -565,9 +620,9 @@ function AlternateDayLog({ employee, attendance }) {
                   )}
                 </div>
                 <div style={{ display: "flex", gap: 16, fontSize: 12.5, color: DARK.muted }}>
-                  <span>In: <strong style={{ color: DARK.ink }}>{fmtTime(checkIn) || "—"}</strong></span>
+                  <span>In: <strong style={{ color: flaggedIn ? COLORS.red : DARK.ink }}>{flaggedIn ? "No check-in" : (fmtTime(checkIn) || "—")}</strong></span>
                   <span>Out: <strong style={{ color: DARK.ink }}>{fmtTime(checkOut) || "—"}</strong></span>
-                  {hrs != null && <span>Hours: <strong style={{ color: DARK.ink }}>{fmtHrs(hrs)}</strong></span>}
+                  {dayHours > 0 && <span>Hours: <strong style={{ color: DARK.ink }}>{fmtHrs(dayHours)}</strong></span>}
                 </div>
               </div>
             );
