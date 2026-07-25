@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { LogIn, LogOut, Home, Coffee, HelpCircle, LogOut as SignOut, Repeat, MapPin, X, Check, CalendarPlus, Clock, Sun, Moon, CloudSun, ListChecks, WifiOff, Pencil } from "lucide-react";
+import { LogIn, LogOut, Home, Coffee, HelpCircle, LogOut as SignOut, Repeat, MapPin, X, Check, CalendarPlus, Clock, Sun, Moon, CloudSun, ListChecks, WifiOff, Pencil, ChevronDown } from "lucide-react";
 import { COLORS } from "../lib/constants";
 import { computeStatus, fmtTime, fmtHrs, todayStr } from "../lib/utils";
 import { StatusPill, LogoMark, Field, inputStyle, secondaryBtn } from "../components/ui";
@@ -87,12 +87,14 @@ function DashboardStyles() {
       .rv-cta2:not(:disabled):active { transform: translateY(0) scale(0.98); }
       .rv-row { transition: background .15s ease; }
       .rv-row:hover { background: #F5F7FC; }
-      .rv-sidebar-item { transition: background .15s ease, color .15s ease, box-shadow .15s ease; }
-      .rv-sidebar-item:not(.rv-active):hover { background: rgba(255,255,255,0.08) !important; color: #fff; box-shadow: inset 0 1px 0 rgba(255,255,255,0.06); }
+      .rv-sidebar-item { transition: background .15s ease, color .15s ease, box-shadow .15s ease, transform .15s ease; }
+      .rv-sidebar-item:not(.rv-active):hover { background: rgba(255,255,255,0.08) !important; color: #fff; box-shadow: inset 0 1px 0 rgba(255,255,255,0.06); transform: translateX(3px); }
 
       .rv-dark-card { background: ${DARK.card} !important; border: 1px solid ${DARK.cardBorder} !important; color: ${DARK.ink}; box-shadow: 0 10px 28px -16px rgba(15,27,51,0.22), 0 2px 8px -4px rgba(15,27,51,0.08); transition: box-shadow .2s ease; }
       .rv-dark-row { border-bottom: 1px solid ${DARK.line} !important; }
       .rv-dark-row:hover { background: #F5F7FC !important; }
+      .rv-show-all-btn { transition: background .15s ease, color .15s ease; }
+      .rv-show-all-btn:hover { background: #F5F7FC !important; color: ${COLORS.navy}; }
 
       .rv-edit-link { display: inline-flex; align-items: center; gap: 4px; border: none; background: transparent; cursor: pointer; padding: 0; margin-top: 3px; color: #8FA2E0; font-size: 11px; font-weight: 700; transition: color .15s ease, gap .15s ease; }
       .rv-edit-link:hover { color: #fff; gap: 6px; }
@@ -117,7 +119,8 @@ const SIDEBAR_ITEMS = [
   { key: "alternate", label: "Alternate days", icon: Repeat },
 ];
 
-function Sidebar({ tab, setTab, employee, onHelp, onLogout, onEditProfile }) {
+function Sidebar({ tab, setTab, employee, onHelp, onLogout, onEditProfile, leaveRequests, attendance }) {
+  const [expanded, setExpanded] = useState(null); // 'leaves' | 'alternate' | null
   const isMobile = typeof window !== "undefined" && window.innerWidth < 720;
   const initial = employee.name ? employee.name.trim()[0].toUpperCase() : "?";
 
@@ -157,7 +160,7 @@ function Sidebar({ tab, setTab, employee, onHelp, onLogout, onEditProfile }) {
 
   return (
     <div style={{
-      display: "flex", flexDirection: "column", width: 240, flexShrink: 0,
+      display: "flex", flexDirection: "column", width: 280, flexShrink: 0,
       minHeight: "100vh", position: "sticky", top: 0,
       background: SIDEBAR_GRADIENT,
       padding: "22px 16px",
@@ -192,25 +195,58 @@ function Sidebar({ tab, setTab, employee, onHelp, onLogout, onEditProfile }) {
         </div>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {SIDEBAR_ITEMS.map(it => {
           const active = tab === it.key;
+          const expandable = it.key === "leaves" || it.key === "alternate";
+          const isOpen = expanded === it.key;
           return (
-            <button
-              key={it.key}
-              className={`rv-sidebar-item${active ? " rv-active" : ""}`}
-              onClick={() => setTab(it.key)}
-              style={{
-                display: "flex", alignItems: "center", gap: 10, whiteSpace: "nowrap",
-                padding: "10px 14px", borderRadius: 10, border: "none", cursor: "pointer",
-                background: active ? "linear-gradient(180deg, #ffffff, #EEF1FA)" : "transparent",
-                color: active ? COLORS.navy : "#CBD5F5",
-                fontWeight: active ? 800 : 600, fontSize: 13.5, textAlign: "left",
-                boxShadow: active ? "0 6px 16px -6px rgba(0,0,0,0.4), inset 0 1px 0 #fff" : "none",
-              }}
-            >
-              <it.icon size={17} /> {it.label}
-            </button>
+            <div key={it.key}>
+              <button
+                className={`rv-sidebar-item${active ? " rv-active" : ""}`}
+                onClick={() => {
+                  setTab(it.key);
+                  if (expandable) setExpanded(isOpen ? null : it.key);
+                }}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between", whiteSpace: "nowrap",
+                  width: "100%", padding: "14px 16px", borderRadius: 12, border: "none", cursor: "pointer",
+                  background: active ? "linear-gradient(180deg, #ffffff, #EEF1FA)" : "transparent",
+                  color: active ? COLORS.navy : "#CBD5F5",
+                  fontWeight: active ? 800 : 600, fontSize: 15, textAlign: "left",
+                  boxShadow: active ? "0 6px 16px -6px rgba(0,0,0,0.4), inset 0 1px 0 #fff" : "none",
+                }}
+              >
+                <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <it.icon size={20} /> {it.label}
+                </span>
+                {expandable && (
+                  <ChevronDown
+                    size={15}
+                    style={{
+                      transform: isOpen ? "rotate(180deg)" : "none",
+                      transition: "transform .25s ease",
+                      opacity: active ? 0.65 : 0.5,
+                      flexShrink: 0,
+                    }}
+                  />
+                )}
+              </button>
+
+              {expandable && (
+                <div style={{
+                  display: "grid",
+                  gridTemplateRows: isOpen ? "1fr" : "0fr",
+                  transition: "grid-template-rows .35s ease",
+                }}>
+                  <div style={{ overflow: "hidden", minHeight: 0 }}>
+                    {it.key === "leaves"
+                      ? <SidebarLeavesPreview leaveRequests={leaveRequests} />
+                      : <SidebarAlternatePreview employee={employee} attendance={attendance} />}
+                  </div>
+                </div>
+              )}
+            </div>
           );
         })}
       </div>
@@ -241,6 +277,60 @@ function Sidebar({ tab, setTab, employee, onHelp, onLogout, onEditProfile }) {
           <SignOut size={17} /> Log out
         </button>
       </div>
+    </div>
+  );
+}
+
+/* Compact, date-first previews shown inline in the sidebar when the
+   Leaves / Alternate days nav item is expanded — same data as the main
+   tab content, just condensed to the last handful of dates. */
+const SIDEBAR_LEAVE_DOT = { pending: "#D99A2B", approved: "#3DD68C", rejected: "#D9534F" };
+
+function SidebarLeavesPreview({ leaveRequests }) {
+  const items = (leaveRequests || []).slice(0, 5);
+  if (items.length === 0) {
+    return (
+      <div style={{ padding: "6px 14px 12px 46px", fontSize: 12, color: "#8FA2E0" }}>
+        No leave requests yet.
+      </div>
+    );
+  }
+  return (
+    <div style={{ padding: "6px 14px 12px 46px", display: "flex", flexDirection: "column", gap: 8 }}>
+      {items.map(r => (
+        <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12, color: "#CBD5F5", fontWeight: 600 }}>
+          <span style={{ width: 5, height: 5, borderRadius: "50%", background: SIDEBAR_LEAVE_DOT[r.status] || "#8FA2E0", flexShrink: 0 }} />
+          {new Date(r.startDate + "T00:00:00").toLocaleDateString([], { month: "short", day: "numeric" })}
+          {r.endDate && r.endDate !== r.startDate && (
+            <> – {new Date(r.endDate + "T00:00:00").toLocaleDateString([], { month: "short", day: "numeric" })}</>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SidebarAlternatePreview({ employee, attendance }) {
+  const dates = Object.entries(attendance || {})
+    .filter(([key, rec]) => key.startsWith(`${employee.id}|`) && rec?.alternateDay)
+    .map(([key]) => key.split("|")[1])
+    .sort((a, b) => (a < b ? 1 : -1))
+    .slice(0, 5);
+  if (dates.length === 0) {
+    return (
+      <div style={{ padding: "6px 14px 12px 46px", fontSize: 12, color: "#8FA2E0" }}>
+        No alternate days marked yet.
+      </div>
+    );
+  }
+  return (
+    <div style={{ padding: "6px 14px 12px 46px", display: "flex", flexDirection: "column", gap: 8 }}>
+      {dates.map(date => (
+        <div key={date} style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12, color: "#CBD5F5", fontWeight: 600 }}>
+          <span style={{ width: 5, height: 5, borderRadius: "50%", background: COLORS.violet, flexShrink: 0 }} />
+          {new Date(date + "T00:00:00").toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}
+        </div>
+      ))}
     </div>
   );
 }
@@ -290,7 +380,7 @@ export default function EmployeeDashboard({ employee, attendance, punch, now, on
       background: DARK.pageBg,
     }}>
       <DashboardStyles />
-      <Sidebar tab={tab} setTab={setTab} employee={displayEmployee} onHelp={() => setShowHelp(true)} onLogout={onLogout} onEditProfile={() => setEditProfileModal(true)} />
+      <Sidebar tab={tab} setTab={setTab} employee={displayEmployee} onHelp={() => setShowHelp(true)} onLogout={onLogout} onEditProfile={() => setEditProfileModal(true)} leaveRequests={leaveRequests} attendance={attendance} />
 
       <div style={{ flex: 1, minWidth: 0, padding: "0 32px" }}>
         <div style={{ maxWidth: 960, margin: "0 auto", padding: "30px 0 60px" }}>
@@ -482,55 +572,100 @@ function PunchErrorBanner({ message }) {
 }
 
 function RecentActivity({ employee, attendance, now }) {
-  const days = [...Array(5)].map((_, i) => {
+  const [showAll, setShowAll] = useState(false);
+
+  // Every day from the 1st of the current month through today, most recent
+  // first. Recomputed on every render from `now`/`attendance`, so a punch
+  // made moments ago (today's row, or one just corrected by HR) shows up
+  // immediately without any extra plumbing.
+  const dayOfMonth = now.getDate();
+  const allDays = [...Array(dayOfMonth)].map((_, i) => {
     const d = new Date(now); d.setDate(d.getDate() - i);
     return todayStr(d);
   });
+  const extraCount = allDays.length - 5;
+
   const DOT_COLOR = {
     present: "#2F9E6E", late: "#D99A2B", wfh: "#2F6FED",
     absent: "#D9534F", leave: "#8B6BD1", weekend: "#B7BECF", half: "#D99A2B",
   };
 
+  const renderRow = (date) => {
+    const rec = attendance[`${employee.id}|${date}`];
+    const isPast = date < todayStr(now);
+    const status = computeStatus(employee, rec, isPast, now.getHours() * 60 + now.getMinutes(), date);
+    const flaggedIn = isFlaggedNotARealCheckIn(rec);
+    const inTime = flaggedIn ? "No check-in" : (fmtTime(rec?.checkIn) || fmtTime(rec?.wfhCheckIn));
+    const outTime = (rec?.checkIn && !rec?.checkOut) || (rec?.wfhCheckIn && !rec?.wfhCheckOut)
+      ? "No checkout" : (fmtTime(rec?.checkOut) || fmtTime(rec?.wfhCheckOut));
+    const hasTimes = (inTime && inTime !== "No check-in") || outTime;
+    const dayHours = dayHoursFor(rec);
+    return (
+      <div key={date} className="rv-row rv-dark-row" style={{
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+        padding: "11px 16px", gap: 10, flexWrap: "wrap", borderRadius: 8,
+      }}>
+        <div>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 9, fontSize: 13, color: DARK.ink, fontWeight: 700 }}>
+            <span style={{
+              width: 7, height: 7, borderRadius: "50%", flexShrink: 0,
+              background: DOT_COLOR[status?.tone] || DARK.muted,
+            }} />
+            {new Date(date + "T00:00:00").toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}
+          </span>
+          {(hasTimes || flaggedIn) && (
+            <div style={{ fontSize: 12, color: DARK.muted, marginTop: 2, marginLeft: 16 }}>
+              In: <strong style={{ color: flaggedIn ? COLORS.red : DARK.ink }}>{inTime || "—"}</strong>
+              {"  ·  "}
+              Out: <strong style={{ color: outTime === "No checkout" ? COLORS.red : DARK.ink }}>{outTime || "—"}</strong>
+              {dayHours > 0 && <> {"  ·  "}Hours: <strong style={{ color: DARK.ink }}>{fmtHrs(dayHours)}</strong></>}
+            </div>
+          )}
+        </div>
+        <StatusPill {...status} />
+      </div>
+    );
+  };
+
+  const visibleDays = allDays.slice(0, 5);
+  const collapsibleDays = allDays.slice(5);
+
   return (
     <div className="rv-stagger rv-stagger-4" style={{ marginTop: 26 }}>
       <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 10, color: DARK.ink }}>Recent activity</div>
       <div className="rv-card rv-dark-card" style={{ padding: "6px 4px", borderRadius: 16 }}>
-        {days.map(date => {
-          const rec = attendance[`${employee.id}|${date}`];
-          const isPast = date < todayStr(now);
-          const status = computeStatus(employee, rec, isPast, now.getHours() * 60 + now.getMinutes(), date);
-          const flaggedIn = isFlaggedNotARealCheckIn(rec);
-          const inTime = flaggedIn ? "No check-in" : (fmtTime(rec?.checkIn) || fmtTime(rec?.wfhCheckIn));
-          const outTime = (rec?.checkIn && !rec?.checkOut) || (rec?.wfhCheckIn && !rec?.wfhCheckOut)
-            ? "No checkout" : (fmtTime(rec?.checkOut) || fmtTime(rec?.wfhCheckOut));
-          const hasTimes = (inTime && inTime !== "No check-in") || outTime;
-          const dayHours = dayHoursFor(rec);
-          return (
-            <div key={date} className="rv-row rv-dark-row" style={{
-              display: "flex", justifyContent: "space-between", alignItems: "center",
-              padding: "11px 16px", gap: 10, flexWrap: "wrap", borderRadius: 8,
-            }}>
-              <div>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 9, fontSize: 13, color: DARK.ink, fontWeight: 700 }}>
-                  <span style={{
-                    width: 7, height: 7, borderRadius: "50%", flexShrink: 0,
-                    background: DOT_COLOR[status?.tone] || DARK.muted,
-                  }} />
-                  {new Date(date + "T00:00:00").toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}
-                </span>
-                {(hasTimes || flaggedIn) && (
-                  <div style={{ fontSize: 12, color: DARK.muted, marginTop: 2, marginLeft: 16 }}>
-                    In: <strong style={{ color: flaggedIn ? COLORS.red : DARK.ink }}>{inTime || "—"}</strong>
-                    {"  ·  "}
-                    Out: <strong style={{ color: outTime === "No checkout" ? COLORS.red : DARK.ink }}>{outTime || "—"}</strong>
-                    {dayHours > 0 && <> {"  ·  "}Hours: <strong style={{ color: DARK.ink }}>{fmtHrs(dayHours)}</strong></>}
-                  </div>
-                )}
-              </div>
-              <StatusPill {...status} />
+        {visibleDays.map(renderRow)}
+
+        {extraCount > 0 && (
+          <div
+            className="rv-expand-panel"
+            style={{
+              display: "grid",
+              gridTemplateRows: showAll ? "1fr" : "0fr",
+              transition: "grid-template-rows .4s ease",
+            }}
+          >
+            <div style={{ overflow: "hidden", minHeight: 0 }}>
+              {collapsibleDays.map(renderRow)}
             </div>
-          );
-        })}
+          </div>
+        )}
+
+        {extraCount > 0 && (
+          <button
+            className="rv-show-all-btn"
+            onClick={() => setShowAll(v => !v)}
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+              width: "100%", background: "transparent", border: "none", cursor: "pointer",
+              padding: "10px 16px", fontSize: 12.5, fontWeight: 700, color: COLORS.blue,
+              borderTop: `1px solid ${DARK.line}`,
+            }}
+          >
+            <ChevronDown size={15} style={{ transform: showAll ? "rotate(180deg)" : "none", transition: "transform .3s ease" }} />
+            {showAll ? "Show less" : `Show all this month (${extraCount} more)`}
+          </button>
+        )}
       </div>
     </div>
   );
