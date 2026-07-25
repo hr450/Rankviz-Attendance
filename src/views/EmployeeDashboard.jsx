@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { LogIn, LogOut, Home, Coffee, HelpCircle, LogOut as SignOut, Repeat, MapPin, X, Check, CalendarPlus, Clock, Sun, Moon, CloudSun, ListChecks, WifiOff } from "lucide-react";
+import { LogIn, LogOut, Home, Coffee, HelpCircle, LogOut as SignOut, Repeat, MapPin, X, Check, CalendarPlus, Clock, Sun, Moon, CloudSun, ListChecks, WifiOff, Pencil } from "lucide-react";
 import { COLORS } from "../lib/constants";
 import { computeStatus, fmtTime, fmtHrs, todayStr } from "../lib/utils";
 import { StatusPill, LogoMark, Field, inputStyle, secondaryBtn } from "../components/ui";
@@ -56,6 +56,11 @@ function DashboardStyles() {
       .rv-dark-card { background: ${DARK.card} !important; border: 1px solid ${DARK.cardBorder} !important; color: ${DARK.ink}; box-shadow: 0 10px 28px -16px rgba(15,27,51,0.22), 0 2px 8px -4px rgba(15,27,51,0.08); transition: box-shadow .2s ease; }
       .rv-dark-row { border-bottom: 1px solid ${DARK.line} !important; }
       .rv-dark-row:hover { background: #F5F7FC !important; }
+
+      .rv-edit-link { display: inline-flex; align-items: center; gap: 4px; border: none; background: transparent; cursor: pointer; padding: 0; margin-top: 3px; color: #8FA2E0; font-size: 11px; font-weight: 700; transition: color .15s ease, gap .15s ease; }
+      .rv-edit-link:hover { color: #fff; gap: 6px; }
+      .rv-edit-link svg { transition: transform .2s ease; }
+      .rv-edit-link:hover svg { transform: rotate(-14deg) scale(1.08); }
     `}</style>
   );
 }
@@ -75,7 +80,7 @@ const SIDEBAR_ITEMS = [
   { key: "alternate", label: "Alternate days", icon: Repeat },
 ];
 
-function Sidebar({ tab, setTab, employee, onHelp, onLogout }) {
+function Sidebar({ tab, setTab, employee, onHelp, onLogout, onEditProfile }) {
   const isMobile = typeof window !== "undefined" && window.innerWidth < 720;
   const initial = employee.name ? employee.name.trim()[0].toUpperCase() : "?";
 
@@ -144,6 +149,9 @@ function Sidebar({ tab, setTab, employee, onHelp, onLogout }) {
         <div style={{ lineHeight: 1.25, minWidth: 0 }}>
           <div style={{ fontSize: 13.5, fontWeight: 800, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{employee.name}</div>
           <div style={{ fontSize: 11, color: "#B9C3E8", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{employee.department}</div>
+          <button className="rv-edit-link" onClick={onEditProfile}>
+            <Pencil size={11} /> Edit
+          </button>
         </div>
       </div>
 
@@ -200,12 +208,16 @@ function Sidebar({ tab, setTab, employee, onHelp, onLogout }) {
   );
 }
 
-export default function EmployeeDashboard({ employee, attendance, punch, now, onLogout, leaveTypes = [], leaveRequests = [], onApplyLeave }) {
+export default function EmployeeDashboard({ employee, attendance, punch, now, onLogout, leaveTypes = [], leaveRequests = [], onApplyLeave, onUpdateProfile }) {
   const [showHelp, setShowHelp] = useState(false);
   const [wfhModal, setWfhModal] = useState(null); // 'in' | 'out' | null
   const [leaveModal, setLeaveModal] = useState(false);
+  const [editProfileModal, setEditProfileModal] = useState(false);
+  const [profileOverride, setProfileOverride] = useState(null); // { name, department } — optimistic local edit
   const [tab, setTab] = useState("attendance"); // 'attendance' | 'leaves' | 'alternate'
   const [punchError, setPunchError] = useState(null);
+
+  const displayEmployee = profileOverride ? { ...employee, ...profileOverride } : employee;
 
   // Office Check in / Check out / alternate-day check-ins are IP-restricted
   // (see api/attendance/punch.js) — this surfaces the reason when the
@@ -241,7 +253,7 @@ export default function EmployeeDashboard({ employee, attendance, punch, now, on
       background: DARK.pageBg,
     }}>
       <DashboardStyles />
-      <Sidebar tab={tab} setTab={setTab} employee={employee} onHelp={() => setShowHelp(true)} onLogout={onLogout} />
+      <Sidebar tab={tab} setTab={setTab} employee={displayEmployee} onHelp={() => setShowHelp(true)} onLogout={onLogout} onEditProfile={() => setEditProfileModal(true)} />
 
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ maxWidth: 960, margin: "0 auto", padding: "30px 24px 60px" }}>
@@ -259,7 +271,7 @@ export default function EmployeeDashboard({ employee, attendance, punch, now, on
           </div>
           <div>
             <h1 style={{ fontSize: 28, fontWeight: 800, margin: 0, letterSpacing: -0.3, color: DARK.ink }}>
-              Hi, {employee.name.split(" ")[0]}
+              Hi, {displayEmployee.name.split(" ")[0]}
             </h1>
             <p style={{ color: DARK.muted, margin: "2px 0 0", fontSize: 14, display: "flex", alignItems: "center", gap: 6 }}>
               {isLive && <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#3DD68C", flexShrink: 0 }} />}
@@ -348,6 +360,19 @@ export default function EmployeeDashboard({ employee, attendance, punch, now, on
       </div>
 
       {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
+      {editProfileModal && (
+        <EditProfileModal
+          employee={displayEmployee}
+          onClose={() => setEditProfileModal(false)}
+          onSubmit={async (payload) => {
+            if (onUpdateProfile) {
+              await onUpdateProfile({ employeeId: employee.id, ...payload });
+            }
+            setProfileOverride(payload);
+            setEditProfileModal(false);
+          }}
+        />
+      )}
       {leaveModal && (
         <LeaveApplicationModal
           leaveTypes={leaveTypes}
@@ -549,6 +574,72 @@ function AlternateDayLog({ employee, attendance }) {
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+function EditProfileModal({ employee, onClose, onSubmit }) {
+  const [name, setName] = useState(employee.name || "");
+  const [department, setDepartment] = useState(employee.department || "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const submit = async () => {
+    setError("");
+    if (!name.trim()) { setError("Name can't be empty."); return; }
+    setBusy(true);
+    try {
+      await onSubmit({ name: name.trim(), department: department.trim() });
+    } catch (e) {
+      setError(e.message || "Couldn't save your changes.");
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, background: "rgba(15,27,51,0.5)", display: "flex",
+      alignItems: "center", justifyContent: "center", padding: 16, zIndex: 60,
+    }} className="rv-anim-fadein" onClick={onClose}>
+      <div className="rv-card rv-anim-popin" style={{ width: "100%", maxWidth: 420, padding: 28 }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+            <div style={{ width: 38, height: 38, borderRadius: 10, background: COLORS.bg, color: COLORS.blue, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Pencil size={18} />
+            </div>
+            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>Edit profile</h3>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: COLORS.muted }}><X size={20} /></button>
+        </div>
+        <p style={{ color: COLORS.muted, fontSize: 13, margin: "6px 0 20px" }}>
+          Update how your name and designation appear across the app.
+        </p>
+
+        <Field label="Full name">
+          <input value={name} onChange={e => setName(e.target.value)} style={inputStyle} placeholder="e.g. Ayesha Hassan" />
+        </Field>
+        <Field label="Designation">
+          <input value={department} onChange={e => setDepartment(e.target.value)} style={inputStyle} placeholder="e.g. Software Engineer" />
+        </Field>
+
+        {error && <div style={{ color: COLORS.red, fontSize: 12.5, fontWeight: 600, marginBottom: 10 }}>{error}</div>}
+
+        <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+          <button onClick={onClose} style={secondaryBtn}>Cancel</button>
+          <button
+            onClick={submit}
+            disabled={busy}
+            style={{
+              flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7,
+              background: `linear-gradient(135deg, ${COLORS.blue}, ${COLORS.orange})`, color: "#fff",
+              border: "none", borderRadius: 11, padding: "11px 18px", fontWeight: 700, fontSize: 14, cursor: "pointer",
+              opacity: busy ? 0.7 : 1,
+            }}
+          >
+            <Check size={16} /> {busy ? "Saving…" : "Save changes"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
