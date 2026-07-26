@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Coffee, Repeat, Home, Pencil, X, CalendarHeart } from "lucide-react";
+import * as XLSX from "xlsx";
+import { ChevronLeft, ChevronRight, Coffee, Repeat, Home, Pencil, X, CalendarHeart, Download } from "lucide-react";
 import { COLORS, MANUAL_STATUS_OPTIONS } from "../lib/constants";
 import { computeStatus, fmtTime, fmtHrs, monthKey, daysInMonth, todayStr } from "../lib/utils";
 import { StatusPill, StatCard, selectStyle, th, td } from "../components/ui";
@@ -95,6 +96,22 @@ function hasAnySession(rec) {
   return !!(rec?.checkIn || rec?.wfhCheckIn || rec?.secondCheckIn);
 }
 
+// Flattens everything the table's Notes cell shows (holiday name, alt-day/WFH
+// tags, leave code, the actual notes text, and the "Edited" flag) into one
+// plain string — used by the Excel export since a spreadsheet cell can't hold
+// the little colored badges the table renders.
+function noteSummaryFor(r, holidayByDate) {
+  const parts = [];
+  if (holidayByDate[r.date]) parts.push(`Holiday: ${holidayByDate[r.date]}`);
+  if (r.rec?.alternateDay) parts.push("Alt. day");
+  if (r.rec?.type === "wfh" && !r.rec?.alternateDay) parts.push("WFH");
+  const code = leaveCodeFor(r.rec);
+  if (code) parts.push(code === "ShortLeave" ? "Short Leave" : code);
+  if (r.rec?.notes) parts.push(r.rec.notes);
+  if (r.rec?.manuallyEdited) parts.push(r.rec.editedBy ? `Edited by ${r.rec.editedBy}` : "Edited");
+  return parts.join(" | ");
+}
+
 export default function MonthlyReportView({ employees, attendance, now, onSaveEdit, onUpdateShift, session, publicHolidays = [] }) {
   const [empId, setEmpId] = useState(employees[0]?.id || "");
   const [ym, setYm] = useState(monthKey(todayStr(now)));
@@ -181,6 +198,46 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
     setStatusSavingDate(null);
   };
 
+  // Exports exactly what the table below shows for this employee/month — one
+  // row per day, with the same check-in/out, hours, status, and notes the HR
+  // user is already looking at. `rows` is stored newest-first (see the
+  // useMemo above), so this un-reverses it for a normal chronological sheet.
+  const handleExportExcel = () => {
+    const exportRows = [...rows].reverse().map((r) => {
+      const officeHours = sessionHours(r.rec?.checkIn, r.rec?.checkOut);
+      const wfhHours = r.rec?.manualWfhHours != null ? r.rec.manualWfhHours : sessionHours(r.rec?.wfhCheckIn, r.rec?.wfhCheckOut);
+      const dayHours = r.rec?.manualTotalHours != null ? r.rec.manualTotalHours : totalWorkedHours(r.rec);
+      const hours = (hasAnySession(r.rec) || r.rec?.manualTotalHours != null) ? dayHours : null;
+      const wfhHoursShown = (r.rec?.wfhCheckIn && r.rec?.wfhCheckOut) || r.rec?.manualWfhHours != null;
+      const flaggedNotReal = isFlaggedNotARealCheckIn(r.rec);
+
+      return {
+        Date: new Date(r.date + "T00:00:00").toLocaleDateString([], { weekday: "short", year: "numeric", month: "short", day: "numeric" }),
+        Status: r.status?.label || "",
+        "Check-in": flaggedNotReal ? "No check-in" : (r.rec?.checkIn ? fmtTime(r.rec.checkIn) : ""),
+        "Check-out": flaggedNotReal
+          ? `${fmtTime(r.rec.checkIn)} (likely checkout — no check-in recorded)`
+          : r.rec?.checkIn ? (r.rec?.checkOut ? fmtTime(r.rec.checkOut) : "No checkout") : "",
+        "Office Hours": (r.rec?.checkIn && r.rec?.checkOut) ? Number(officeHours.toFixed(2)) : "",
+        "WFH in": r.rec?.wfhCheckIn ? fmtTime(r.rec.wfhCheckIn) : "",
+        "WFH out": r.rec?.wfhCheckIn ? (r.rec?.wfhCheckOut ? fmtTime(r.rec.wfhCheckOut) : "No checkout") : "",
+        "WFH Hours": wfhHoursShown ? Number(wfhHours.toFixed(2)) : "",
+        "Total Hours": hours != null ? Number(hours.toFixed(2)) : "",
+        Notes: noteSummaryFor(r, holidayByDate),
+      };
+    });
+
+    const ws = XLSX.utils.json_to_sheet(exportRows);
+    ws["!cols"] = [
+      { wch: 18 }, { wch: 12 }, { wch: 10 }, { wch: 36 },
+      { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 45 },
+    ];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Attendance");
+    const monthLabel = new Date(ym + "-01").toLocaleDateString([], { month: "long", year: "numeric" });
+    XLSX.writeFile(wb, `${emp.name} - ${monthLabel}.xlsx`);
+  };
+
   if (!emp) return <p style={{ color: COLORS.muted }}>No employees yet — add some in the Employees tab first.</p>;
 
   return (
@@ -237,7 +294,20 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
       )}
 
       <div className="rv-card" style={{ padding: "16px 20px", overflowX: "auto" }}>
-        <h3 style={{ margin: "0 0 12px", fontSize: 15, fontWeight: 700 }}>Full attendance — {emp.name}</h3>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
+          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>Full attendance — {emp.name}</h3>
+          <button
+            onClick={handleExportExcel}
+            title="Download this employee's month as an Excel file"
+            style={{
+              display: "flex", alignItems: "center", gap: 6,
+              background: "#fff", border: `1px solid ${COLORS.line}`, borderRadius: 8,
+              padding: "7px 13px", fontSize: 13, fontWeight: 700, color: COLORS.ink, cursor: "pointer",
+            }}
+          >
+            <Download size={14} /> Download Excel
+          </button>
+        </div>
         <table className="rv-table-hover" style={{ width: "100%", borderCollapse: "collapse", minWidth: 940 }}>
           <thead>
             <tr style={{ color: COLORS.muted, fontSize: 12.5, textAlign: "left" }}>
