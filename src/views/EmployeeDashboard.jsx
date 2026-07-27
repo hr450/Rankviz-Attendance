@@ -251,11 +251,10 @@ const SIDEBAR_GRADIENT = [
 const SIDEBAR_ITEMS = [
   { key: "attendance", label: "Attendance", icon: ListChecks },
   { key: "leaves", label: "Leaves", icon: CalendarPlus },
-  { key: "alternate", label: "Alternate days", icon: Repeat },
 ];
 
 function Sidebar({ tab, setTab, employee, onSettings, onLogout, onEditProfile, leaveRequests, attendance }) {
-  const [expanded, setExpanded] = useState(null); // 'leaves' | 'alternate' | null
+  const [expanded, setExpanded] = useState(null); // 'leaves' | null
   const isMobile = typeof window !== "undefined" && window.innerWidth < 720;
   const initial = employee.name ? employee.name.trim()[0].toUpperCase() : "?";
 
@@ -334,7 +333,7 @@ function Sidebar({ tab, setTab, employee, onSettings, onLogout, onEditProfile, l
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {SIDEBAR_ITEMS.map(it => {
           const active = tab === it.key;
-          const expandable = it.key === "leaves" || it.key === "alternate";
+          const expandable = it.key === "leaves";
           const isOpen = expanded === it.key;
           return (
             <div key={it.key}>
@@ -376,9 +375,7 @@ function Sidebar({ tab, setTab, employee, onSettings, onLogout, onEditProfile, l
                   transition: "grid-template-rows .35s ease",
                 }}>
                   <div style={{ overflow: "hidden", minHeight: 0 }}>
-                    {it.key === "leaves"
-                      ? <SidebarLeavesPreview leaveRequests={leaveRequests} />
-                      : <SidebarAlternatePreview employee={employee} attendance={attendance} />}
+                    {it.key === "leaves" && <SidebarLeavesPreview leaveRequests={leaveRequests} />}
                   </div>
                 </div>
               )}
@@ -417,9 +414,9 @@ function Sidebar({ tab, setTab, employee, onSettings, onLogout, onEditProfile, l
   );
 }
 
-/* Compact, date-first previews shown inline in the sidebar when the
-   Leaves / Alternate days nav item is expanded — same data as the main
-   tab content, just condensed to the last handful of dates. */
+/* Compact, date-first preview shown inline in the sidebar when the
+   Leaves nav item is expanded — same data as the main tab content, just
+   condensed to the last handful of dates. */
 const SIDEBAR_LEAVE_DOT = { pending: "#D99A2B", approved: "#3DD68C", rejected: "#D9534F" };
 
 function SidebarLeavesPreview({ leaveRequests }) {
@@ -446,37 +443,13 @@ function SidebarLeavesPreview({ leaveRequests }) {
   );
 }
 
-function SidebarAlternatePreview({ employee, attendance }) {
-  const dates = Object.entries(attendance || {})
-    .filter(([key, rec]) => key.startsWith(`${employee.id}|`) && rec?.alternateDay)
-    .map(([key]) => key.split("|")[1])
-    .sort((a, b) => (a < b ? 1 : -1))
-    .slice(0, 5);
-  if (dates.length === 0) {
-    return (
-      <div style={{ padding: "6px 14px 12px 46px", fontSize: 12, color: "#8FA2E0" }}>
-        No alternate days marked yet.
-      </div>
-    );
-  }
-  return (
-    <div style={{ padding: "6px 14px 12px 46px", display: "flex", flexDirection: "column", gap: 8 }}>
-      {dates.map(date => (
-        <div key={date} style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12, color: "#CBD5F5", fontWeight: 600 }}>
-          <span style={{ width: 5, height: 5, borderRadius: "50%", background: COLORS.violet, flexShrink: 0 }} />
-          {new Date(date + "T00:00:00").toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}
-        </div>
-      ))}
-    </div>
-  );
-}
 
 export default function EmployeeDashboard({ employee, attendance, punch, now, onLogout, leaveTypes = [], leaveRequests = [], onApplyLeave, onUpdateProfile }) {
   const [wfhModal, setWfhModal] = useState(null); // 'in' | 'out' | null
   const [leaveModal, setLeaveModal] = useState(false);
   const [settingsModal, setSettingsModal] = useState(null); // null | 'profile' | 'appearance' | 'helpdesk'
   const [profileOverride, setProfileOverride] = useState(null); // { name, department, avatar } — optimistic local edit
-  const [tab, setTab] = useState("attendance"); // 'attendance' | 'leaves' | 'alternate'
+  const [tab, setTab] = useState("attendance"); // 'attendance' | 'leaves'
   const [punchError, setPunchError] = useState(null);
 
   // Dark mode is a per-browser display preference, not employee data — kept
@@ -611,33 +584,6 @@ export default function EmployeeDashboard({ employee, attendance, punch, now, on
                   </button>
                 </div>
                 <MyLeaveRequestsFull leaveRequests={leaveRequests} />
-              </>
-            )}
-
-            {tab === "alternate" && (
-              <>
-                <div className="rv-stagger rv-stagger-2" style={{ marginBottom: 18 }}>
-                  <button onClick={() => handlePunch("alternate")} style={{ ...secondaryBtn, flex: "unset", display: "inline-flex", alignItems: "center", gap: 7 }}>
-                    <Repeat size={16} /> {rec?.alternateDay ? "Unmark alternate day" : "Mark today as alternate day"}
-                  </button>
-                  {rec?.alternateDay && (
-                    <span style={{ marginLeft: 10, display: "inline-flex", alignItems: "center", gap: 6, background: "#EEE9FC", color: COLORS.violet, fontWeight: 700, fontSize: 12.5, padding: "5px 11px", borderRadius: 999 }}>
-                      Today is marked
-                    </span>
-                  )}
-                </div>
-
-                <div className="rv-stagger rv-stagger-3" style={{
-                  display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 14, marginBottom: 10,
-                }}>
-                  <CtaButton icon={LogIn} label="Check in" tone="present" disabled={!canCheckIn} onClick={() => handlePunch("in")} />
-                  <CtaButton icon={LogOut} label="Check out" tone="late" disabled={!canCheckOut} onClick={() => handlePunch("out")} />
-                  <CtaButton icon={Home} label="WFH check-in" tone="wfh" disabled={!canWfhIn} onClick={() => setWfhModal("in")} />
-                  <CtaButton icon={Home} label="WFH check-out" tone="wfh" disabled={!canWfhOut} onClick={() => setWfhModal("out")} />
-                </div>
-                <PunchErrorBanner message={punchError} />
-
-                <AlternateDayLog employee={employee} attendance={attendance} />
               </>
             )}
           </div>
@@ -844,57 +790,6 @@ function MyLeaveRequestsFull({ leaveRequests }) {
                   display: "inline-flex", alignItems: "center", gap: 6, background: s.bg, color: s.fg,
                   fontWeight: 700, fontSize: 12.5, padding: "4px 10px", borderRadius: 999,
                 }}>{s.label}</span>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* Alternate-day tab: every day this employee marked as an alternate working
-   day, with whatever check-in/check-out (regular or WFH) was logged for it. */
-function AlternateDayLog({ employee, attendance }) {
-  const entries = Object.entries(attendance || {})
-    .filter(([key, rec]) => key.startsWith(`${employee.id}|`) && rec?.alternateDay)
-    .map(([key, rec]) => ({ date: key.split("|")[1], rec }))
-    .sort((a, b) => (a.date < b.date ? 1 : -1));
-
-  return (
-    <div>
-      <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 10, color: "var(--rv-ink)" }}>Alternate day record</div>
-      {entries.length === 0 ? (
-        <div className="rv-card rv-dark-card" style={{ padding: "28px 20px", textAlign: "center", color: "var(--rv-muted)", fontSize: 13.5, borderRadius: 16 }}>
-          No alternate days marked yet.
-        </div>
-      ) : (
-        <div className="rv-card rv-dark-card" style={{ padding: "6px 4px", borderRadius: 16 }}>
-          {entries.map(({ date, rec }) => {
-            const flaggedIn = isFlaggedNotARealCheckIn(rec);
-            const checkIn = flaggedIn ? null : (rec.checkIn || rec.wfhCheckIn);
-            const checkOut = rec.checkOut || rec.wfhCheckOut;
-            const isWfh = !!rec.wfhCheckIn;
-            const dayHours = dayHoursFor(rec);
-            return (
-              <div key={date} className="rv-row rv-dark-row" style={{
-                display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8,
-                padding: "11px 16px", borderRadius: 8,
-              }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: COLORS.violet, flexShrink: 0 }} />
-                  <span style={{ fontSize: 13, fontWeight: 700, color: "var(--rv-ink)" }}>
-                    {new Date(date + "T00:00:00").toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}
-                  </span>
-                  {isWfh && (
-                    <span style={{ fontSize: 11, color: "#5B9CFF", fontWeight: 700, background: "rgba(91,156,255,0.12)", padding: "2px 8px", borderRadius: 999 }}>WFH</span>
-                  )}
-                </div>
-                <div style={{ display: "flex", gap: 16, fontSize: 12.5, color: "var(--rv-muted)" }}>
-                  <span>In: <strong style={{ color: flaggedIn ? COLORS.red : "var(--rv-ink)" }}>{flaggedIn ? "No check-in" : (fmtTime(checkIn) || "—")}</strong></span>
-                  <span>Out: <strong style={{ color: "var(--rv-ink)" }}>{fmtTime(checkOut) || "—"}</strong></span>
-                  {dayHours > 0 && <span>Hours: <strong style={{ color: "var(--rv-ink)" }}>{fmtHrs(dayHours)}</strong></span>}
-                </div>
               </div>
             );
           })}
@@ -1132,7 +1027,6 @@ function AppearanceSettingsPane({ darkMode, onToggleDarkMode }) {
    and HR-side visibility will need its own read path. */
 const ATTENDANCE_FAQ = [
   { q: "I forgot to check in — what do I do?", a: "Raise a ticket below under \"Missed punch\" with the date and roughly what time you arrived. HR can add or correct a check-in on your record." },
-  { q: "How do alternate days work?", a: "Mark today as an alternate day from the Alternate days tab before or after you check in. It flags the day so HR knows it's outside your usual schedule." },
   { q: "When does a leave request actually count?", a: "Applying for leave only sends a request to HR — it doesn't mark your attendance until they approve it. You'll see the status update in \"My leave requests.\"" },
   { q: "My check-out shows as missing but I did check out.", a: "This usually means the check-out didn't register — raise a ticket with the date and time so HR can correct it manually." },
   { q: "Can I work from home and still check in at the office later the same day?", a: "Yes — the dashboard supports a second session per day. Use WFH check-in/out and office check-in/out independently; both count toward your total hours." },
