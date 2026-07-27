@@ -1,7 +1,7 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { LogIn, LogOut, Home, Coffee, LogOut as SignOut, Repeat, MapPin, X, Check, CalendarPlus, Clock, Sun, Moon, CloudSun, ListChecks, WifiOff, Pencil, ChevronDown, Settings as SettingsIcon, User, Camera, Palette, LifeBuoy, Send, Ticket } from "lucide-react";
 import { COLORS } from "../lib/constants";
-import { computeStatus, fmtTime, fmtHrs, todayStr } from "../lib/utils";
+import { computeStatus, fmtTime, fmtHrs, todayStr, monthKey, daysInMonth } from "../lib/utils";
 import { StatusPill, LogoMark, Field, inputStyle, secondaryBtn } from "../components/ui";
 
 /* --- Mirrors the HR monthly report's own calculations (MonthlyReport.jsx)
@@ -41,7 +41,124 @@ function dayHoursFor(rec) {
   return Number.isFinite(n) ? n : 0;
 }
 
-/* Time-of-day icon + tone, used instead of an emoji wave */
+// Classifies a day into CL / SL / AL / Short Leave — mirrors leaveCodeFor()
+// in MonthlyReport.jsx exactly, so an employee's own summary numbers always
+// agree with what HR sees for the same records.
+function leaveCodeFor(rec) {
+  if (!rec) return null;
+  const reason = (rec.leaveReason || "").toLowerCase();
+  if (reason.includes("casual")) return "CL";
+  if (reason.includes("sick")) return "SL";
+  if (reason.includes("annual")) return "AL";
+  if (reason.includes("short")) return "ShortLeave";
+
+  const notes = (rec.notes || "").toLowerCase();
+  const has = (code) => new RegExp(`(^|[^a-z])${code}([^a-z]|$)`, "i").test(notes);
+  if (has("cl") || notes.includes("casual leave")) return "CL";
+  if (has("sl") || notes.includes("sick leave")) return "SL";
+  if (has("al") || notes.includes("annual leave")) return "AL";
+  if (notes.includes("short leave")) return "ShortLeave";
+  return null;
+}
+
+/* --- Left-side "My summary" panel on the Attendance tab: Half day, WFH,
+   Short leave, CL, AL, SL, No check-in/out, Alternate days, and Extra day
+   (an alternate day that happened to fall on a Sat/Sun), for a chosen month
+   or the whole year. --- */
+const EMPTY_SUMMARY = { half: 0, wfh: 0, shortLeave: 0, cl: 0, sl: 0, al: 0, noCheckout: 0, alternate: 0, extraDay: 0 };
+function addSummary(a, b) {
+  const out = { ...a };
+  for (const k in EMPTY_SUMMARY) out[k] = (a[k] || 0) + (b[k] || 0);
+  return out;
+}
+function tallyEmployeeMonth(employee, attendance, monthYm, todayFull, nowMinutes) {
+  const totalDays = daysInMonth(monthYm);
+  const t = { ...EMPTY_SUMMARY };
+  for (let day = 1; day <= totalDays; day++) {
+    const dateStr = `${monthYm}-${String(day).padStart(2, "0")}`;
+    if (dateStr > todayFull) continue;
+    const isPast = dateStr < todayFull;
+    const rec = attendance[`${employee.id}|${dateStr}`];
+    const status = computeStatus(employee, rec, isPast, nowMinutes, dateStr);
+    if (status.tone === "half") t.half++;
+    if (status.tone === "wfh") t.wfh++;
+    if (status.tone === "no_checkout") t.noCheckout++;
+    const code = leaveCodeFor(rec);
+    if (code === "CL") t.cl++;
+    else if (code === "SL") t.sl++;
+    else if (code === "AL") t.al++;
+    else if (code === "ShortLeave") t.shortLeave++;
+    if (rec?.alternateDay) {
+      t.alternate++;
+      const dow = new Date(dateStr + "T00:00:00").getDay(); // 0 = Sun, 6 = Sat
+      if (dow === 0 || dow === 6) t.extraDay++;
+    }
+  }
+  return t;
+}
+function recentMonthOptions(now, count = 12) {
+  const opts = [];
+  for (let i = 0; i < count; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    opts.push({ value: monthKey(todayStr(d)), label: d.toLocaleDateString([], { month: "long", year: "numeric" }) });
+  }
+  return opts;
+}
+
+const SUMMARY_ROWS = [
+  { key: "half", label: "Half day" },
+  { key: "wfh", label: "WFH" },
+  { key: "shortLeave", label: "Short leave" },
+  { key: "cl", label: "CL" },
+  { key: "al", label: "AL" },
+  { key: "sl", label: "SL" },
+  { key: "noCheckout", label: "No check-in/out" },
+  { key: "alternate", label: "Alternate days" },
+  { key: "extraDay", label: "Extra day" },
+];
+
+function AttendanceSummaryPanel({ employee, attendance, now }) {
+  const todayFull = todayStr(now);
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const currentYm = monthKey(todayFull);
+  const [period, setPeriod] = useState(currentYm); // "YYYY-MM", or "annual"
+  const monthOpts = useMemo(() => recentMonthOptions(now, 12), [now]);
+
+  const summary = useMemo(() => {
+    if (period === "annual") {
+      const year = now.getFullYear();
+      let acc = { ...EMPTY_SUMMARY };
+      for (let m = 1; m <= 12; m++) {
+        const monthYm = `${year}-${String(m).padStart(2, "0")}`;
+        if (monthYm > currentYm) break; // don't tally months that haven't happened yet
+        acc = addSummary(acc, tallyEmployeeMonth(employee, attendance, monthYm, todayFull, nowMinutes));
+      }
+      return acc;
+    }
+    return tallyEmployeeMonth(employee, attendance, period, todayFull, nowMinutes);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [employee, attendance, period, todayFull, nowMinutes]);
+
+  return (
+    <div className="rv-card rv-dark-card rv-stagger rv-stagger-2" style={{ padding: 18, borderRadius: 16 }}>
+      <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 10, color: "var(--rv-ink)" }}>My summary</div>
+      <select value={period} onChange={e => setPeriod(e.target.value)} style={{ ...inputStyle, marginBottom: 14, fontSize: 12.5, padding: "7px 9px" }}>
+        {monthOpts.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        <option value="annual">Annual ({now.getFullYear()})</option>
+      </select>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {SUMMARY_ROWS.map(r => (
+          <div key={r.key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12.5, padding: "3px 0", borderBottom: "1px solid var(--rv-line)" }}>
+            <span style={{ color: "var(--rv-muted)", fontWeight: 600 }}>{r.label}</span>
+            <span style={{ color: "var(--rv-ink)", fontWeight: 800 }}>{summary[r.key]}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+
 function greetingIcon(hour) {
   if (hour < 12) return { Icon: Sun, tone: "#F0B23D", bg: "#FBF0DC" };
   if (hour < 18) return { Icon: CloudSun, tone: "#5B9CFF", bg: "#E7EEFF" };
@@ -445,7 +562,11 @@ export default function EmployeeDashboard({ employee, attendance, punch, now, on
 
         <div>
             {tab === "attendance" && (
-              <>
+              <div style={{ display: "flex", gap: 20, alignItems: "flex-start", flexWrap: "wrap" }}>
+                <div style={{ width: 240, flexShrink: 0 }}>
+                  <AttendanceSummaryPanel employee={employee} attendance={attendance} now={now} />
+                </div>
+                <div style={{ flex: 1, minWidth: 280 }}>
                 <div key={date} className="rv-card rv-dark-card rv-anim-slideupin rv-stagger rv-stagger-2" style={{ padding: 24, marginBottom: 22, borderRadius: 16 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
                     <div style={{ fontWeight: 800, fontSize: 17, color: "var(--rv-ink)" }}>Today's attendance</div>
@@ -478,7 +599,8 @@ export default function EmployeeDashboard({ employee, attendance, punch, now, on
                 <PunchErrorBanner message={punchError} />
 
                 <RecentActivity employee={employee} attendance={attendance} now={now} />
-              </>
+                </div>
+              </div>
             )}
 
             {tab === "leaves" && (
