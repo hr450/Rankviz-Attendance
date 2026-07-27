@@ -124,11 +124,11 @@ function pct(value, total) {
   return `${Math.round((value / total) * 100)}%`;
 }
 
-function StatCardsRow({ totals, employeeCount }) {
+function StatCardsRow({ totals, employeeCount, showEmployees = true }) {
   const total = totalMarkedDays(totals);
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 14, marginBottom: 22 }}>
-      <StatCard label="Employees" value={employeeCount} tone="pending" />
+      {showEmployees && <StatCard label="Employees" value={employeeCount} tone="pending" />}
       <StatCard label="Present" value={pct(totals.present, total)} tone="present" />
       <StatCard label="Late" value={pct(totals.late, total)} tone="half" />
       <StatCard label="Half day" value={pct(totals.half, total)} tone="half" />
@@ -200,7 +200,7 @@ function AnnualStats({ data, year }) {
   const { months, yearTotals } = data;
   return (
     <>
-      <StatCardsRow totals={yearTotals} employeeCount={0 /* org total, not a per-employee count in annual view */} />
+      <StatCardsRow totals={yearTotals} employeeCount={0} showEmployees={false} />
       <div className="rv-card" style={{ padding: "16px 20px", overflowX: "auto" }}>
         <h3 style={{ margin: "0 0 12px", fontSize: 15, fontWeight: 700 }}>{year} — month by month (all employees)</h3>
         <table className="rv-table-hover" style={{ width: "100%", borderCollapse: "collapse", minWidth: 920 }}>
@@ -212,37 +212,43 @@ function AnnualStats({ data, year }) {
             </tr>
           </thead>
           <tbody>
-            {months.map((mo, i) => (
-              <tr key={mo.ym} className="rv-row-in" style={{ borderTop: `1px solid ${COLORS.line}`, animationDelay: `${i * 25}ms` }}>
-                <td style={td}><strong>{mo.label}</strong></td>
-                <td style={td}>{mo.present}</td>
-                <td style={td}>{mo.late}</td>
-                <td style={td}>{mo.half}</td>
-                <td style={td}>{mo.wfh}</td>
-                <td style={td}>{mo.shortLeave}</td>
-                <td style={td}>{mo.leave}</td>
-                <td style={td}>{mo.absent}</td>
-                <td style={td}>{mo.holiday}</td>
-                <td style={td}>{mo.noCheckout}</td>
-              </tr>
-            ))}
+            {months.map((mo, i) => {
+              const moTotal = totalMarkedDays(mo);
+              return (
+                <tr key={mo.ym} className="rv-row-in" style={{ borderTop: `1px solid ${COLORS.line}`, animationDelay: `${i * 25}ms` }}>
+                  <td style={td}><strong>{mo.label}</strong></td>
+                  <td style={td}>{pct(mo.present, moTotal)}</td>
+                  <td style={td}>{pct(mo.late, moTotal)}</td>
+                  <td style={td}>{pct(mo.half, moTotal)}</td>
+                  <td style={td}>{pct(mo.wfh, moTotal)}</td>
+                  <td style={td}>{pct(mo.shortLeave, moTotal)}</td>
+                  <td style={td}>{pct(mo.leave, moTotal)}</td>
+                  <td style={td}>{pct(mo.absent, moTotal)}</td>
+                  <td style={td}>{pct(mo.holiday, moTotal)}</td>
+                  <td style={td}>{pct(mo.noCheckout, moTotal)}</td>
+                </tr>
+              );
+            })}
             {months.length === 0 && (
               <tr><td colSpan={10} style={{ ...td, color: COLORS.muted, textAlign: "center", padding: "26px 0" }}>No months in {year} have happened yet.</td></tr>
             )}
-            {months.length > 0 && (
-              <tr style={{ borderTop: `2px solid ${COLORS.line}`, fontWeight: 800 }}>
-                <td style={td}>Total</td>
-                <td style={td}>{yearTotals.present}</td>
-                <td style={td}>{yearTotals.late}</td>
-                <td style={td}>{yearTotals.half}</td>
-                <td style={td}>{yearTotals.wfh}</td>
-                <td style={td}>{yearTotals.shortLeave}</td>
-                <td style={td}>{yearTotals.leave}</td>
-                <td style={td}>{yearTotals.absent}</td>
-                <td style={td}>{yearTotals.holiday}</td>
-                <td style={td}>{yearTotals.noCheckout}</td>
-              </tr>
-            )}
+            {months.length > 0 && (() => {
+              const yearTotal = totalMarkedDays(yearTotals);
+              return (
+                <tr style={{ borderTop: `2px solid ${COLORS.line}`, fontWeight: 800 }}>
+                  <td style={td}>Total</td>
+                  <td style={td}>{pct(yearTotals.present, yearTotal)}</td>
+                  <td style={td}>{pct(yearTotals.late, yearTotal)}</td>
+                  <td style={td}>{pct(yearTotals.half, yearTotal)}</td>
+                  <td style={td}>{pct(yearTotals.wfh, yearTotal)}</td>
+                  <td style={td}>{pct(yearTotals.shortLeave, yearTotal)}</td>
+                  <td style={td}>{pct(yearTotals.leave, yearTotal)}</td>
+                  <td style={td}>{pct(yearTotals.absent, yearTotal)}</td>
+                  <td style={td}>{pct(yearTotals.holiday, yearTotal)}</td>
+                  <td style={td}>{pct(yearTotals.noCheckout, yearTotal)}</td>
+                </tr>
+              );
+            })()}
           </tbody>
         </table>
       </div>
