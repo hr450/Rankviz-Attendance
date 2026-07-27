@@ -116,19 +116,28 @@ export default function AttendanceStatsView({ employees, attendance, now, public
   );
 }
 
+function totalMarkedDays(totals) {
+  return Object.keys(EMPTY_TOTALS).reduce((sum, k) => sum + (totals[k] || 0), 0);
+}
+function pct(value, total) {
+  if (!total) return "0%";
+  return `${Math.round((value / total) * 100)}%`;
+}
+
 function StatCardsRow({ totals, employeeCount }) {
+  const total = totalMarkedDays(totals);
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 14, marginBottom: 22 }}>
       <StatCard label="Employees" value={employeeCount} tone="pending" />
-      <StatCard label="Present" value={totals.present} tone="present" />
-      <StatCard label="Late" value={totals.late} tone="half" />
-      <StatCard label="Half day" value={totals.half} tone="half" />
-      <StatCard label="WFH" value={totals.wfh} tone="wfh" />
-      <StatCard label="Short leave" value={totals.shortLeave} tone="short_leave" />
-      <StatCard label="Leave" value={totals.leave} tone="leave" />
-      <StatCard label="Absent" value={totals.absent} tone="absent" />
-      <StatCard label="Holiday" value={totals.holiday} tone="holiday" />
-      <StatCard label="No checkout" value={totals.noCheckout} tone="no_checkout" />
+      <StatCard label="Present" value={pct(totals.present, total)} tone="present" />
+      <StatCard label="Late" value={pct(totals.late, total)} tone="half" />
+      <StatCard label="Half day" value={pct(totals.half, total)} tone="half" />
+      <StatCard label="WFH" value={pct(totals.wfh, total)} tone="wfh" />
+      <StatCard label="Short leave" value={pct(totals.shortLeave, total)} tone="short_leave" />
+      <StatCard label="Leave" value={pct(totals.leave, total)} tone="leave" />
+      <StatCard label="Absent" value={pct(totals.absent, total)} tone="absent" />
+      <StatCard label="Holiday" value={pct(totals.holiday, total)} tone="holiday" />
+      <StatCard label="No checkout" value={pct(totals.noCheckout, total)} tone="no_checkout" />
     </div>
   );
 }
@@ -159,22 +168,23 @@ const STAT_CHART_COLORS = {
 function TotalsBarChart({ totals }) {
   const keys = Object.keys(STAT_CHART_LABELS);
   const max = Math.max(1, ...keys.map(k => totals[k] || 0));
+  const total = totalMarkedDays(totals);
   return (
     <div className="rv-card" style={{ padding: "20px 24px" }}>
       <h3 style={{ margin: "0 0 18px", fontSize: 15, fontWeight: 700 }}>Attendance breakdown</h3>
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         {keys.map((k, i) => {
           const value = totals[k] || 0;
-          const pct = Math.round((value / max) * 100);
+          const barWidthPct = Math.round((value / max) * 100); // bar length, relative to the largest stat — purely visual
           return (
             <div key={k} className="rv-row-in" style={{ animationDelay: `${i * 40}ms` }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5, fontSize: 12.5 }}>
                 <span style={{ fontWeight: 700, color: COLORS.ink }}>{STAT_CHART_LABELS[k]}</span>
-                <span style={{ fontWeight: 700, color: COLORS.muted }}>{value}</span>
+                <span style={{ fontWeight: 700, color: COLORS.muted }}>{pct(value, total)}</span>
               </div>
               <div style={{ height: 10, borderRadius: 999, background: "#F0F2F8", overflow: "hidden" }}>
                 <div style={{
-                  width: `${pct}%`, height: "100%", borderRadius: 999,
+                  width: `${barWidthPct}%`, height: "100%", borderRadius: 999,
                   background: STAT_CHART_COLORS[k], transition: "width .5s ease",
                 }} />
               </div>
