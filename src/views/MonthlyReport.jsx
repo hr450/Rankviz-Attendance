@@ -1,8 +1,6 @@
-import React, { useMemo, useState, useRef, useEffect } from "react";
+import React, { useMemo, useState } from "react";
 import * as XLSX from "xlsx";
-import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
-import { ChevronLeft, ChevronRight, Coffee, Repeat, Home, Pencil, X, CalendarHeart, Download, ChevronDown, Image as ImageIcon, FileText } from "lucide-react";
+import { ChevronLeft, ChevronRight, Coffee, Repeat, Home, Pencil, X, CalendarHeart, Download } from "lucide-react";
 import { COLORS, MANUAL_STATUS_OPTIONS } from "../lib/constants";
 import { computeStatus, fmtTime, fmtHrs, monthKey, daysInMonth, todayStr } from "../lib/utils";
 import { StatusPill, StatCard, selectStyle, th, td } from "../components/ui";
@@ -120,19 +118,6 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
   const [editingDate, setEditingDate] = useState(null); // date string of the row currently open in the edit modal
   const [statusSavingDate, setStatusSavingDate] = useState(null); // date whose Status-Edit dropdown is mid-save
   const [statusError, setStatusError] = useState(null); // { date, message }
-  const [showExportMenu, setShowExportMenu] = useState(false);
-  const [exporting, setExporting] = useState(false); // "image" | "pdf" | false, disables the menu mid-export
-  const exportMenuRef = useRef(null);
-  const tableCardRef = useRef(null); // wraps the "Full attendance" card — captured for image/PDF export
-
-  useEffect(() => {
-    if (!showExportMenu) return;
-    const closeOnOutsideClick = (e) => {
-      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target)) setShowExportMenu(false);
-    };
-    document.addEventListener("mousedown", closeOnOutsideClick);
-    return () => document.removeEventListener("mousedown", closeOnOutsideClick);
-  }, [showExportMenu]);
 
   const holidayByDate = useMemo(() => {
     const map = {};
@@ -253,50 +238,6 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
     XLSX.writeFile(wb, `${emp.name} - ${monthLabel}.xlsx`);
   };
 
-  // Shared by both the image and PDF exports — renders the "Full attendance"
-  // card to a canvas, skipping anything marked data-export-ignore (the
-  // download menu itself, the Status-Edit dropdowns, and the pencil-edit
-  // buttons), since those are HR-only controls and don't belong in a file
-  // meant to be shared or printed.
-  const captureTableCanvas = async () => {
-    if (!tableCardRef.current) return null;
-    return html2canvas(tableCardRef.current, {
-      backgroundColor: "#ffffff",
-      scale: 2,
-      ignoreElements: (el) => el?.dataset?.exportIgnore === "true",
-    });
-  };
-
-  const monthLabelFor = () => new Date(ym + "-01").toLocaleDateString([], { month: "long", year: "numeric" });
-
-  const handleExportImage = async () => {
-    setExporting("image");
-    try {
-      const canvas = await captureTableCanvas();
-      if (!canvas) return;
-      const link = document.createElement("a");
-      link.download = `${emp.name} - ${monthLabelFor()}.png`;
-      link.href = canvas.toDataURL("image/png");
-      link.click();
-    } finally {
-      setExporting(false);
-    }
-  };
-
-  const handleExportPdf = async () => {
-    setExporting("pdf");
-    try {
-      const canvas = await captureTableCanvas();
-      if (!canvas) return;
-      const imgData = canvas.toDataURL("image/png");
-      const pdf = new jsPDF({ orientation: "landscape", unit: "px", format: [canvas.width, canvas.height] });
-      pdf.addImage(imgData, "PNG", 0, 0, canvas.width, canvas.height);
-      pdf.save(`${emp.name} - ${monthLabelFor()}.pdf`);
-    } finally {
-      setExporting(false);
-    }
-  };
-
   if (!emp) return <p style={{ color: COLORS.muted }}>No employees yet — add some in the Employees tab first.</p>;
 
   return (
@@ -352,39 +293,20 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
         </div>
       )}
 
-      <div className="rv-card" ref={tableCardRef} style={{ padding: "16px 20px", overflowX: "auto" }}>
+      <div className="rv-card" style={{ padding: "16px 20px", overflowX: "auto" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
           <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>Full attendance — {emp.name}</h3>
-          <div ref={exportMenuRef} data-export-ignore="true" style={{ position: "relative" }}>
-            <button
-              onClick={() => setShowExportMenu(v => !v)}
-              disabled={!!exporting}
-              title="Download this employee's month"
-              style={{
-                display: "flex", alignItems: "center", gap: 6,
-                background: "#fff", border: `1px solid ${COLORS.line}`, borderRadius: 8,
-                padding: "7px 13px", fontSize: 13, fontWeight: 700, color: COLORS.ink,
-                cursor: exporting ? "default" : "pointer", opacity: exporting ? 0.6 : 1,
-              }}
-            >
-              <Download size={14} />
-              {exporting === "image" ? "Rendering image…" : exporting === "pdf" ? "Rendering PDF…" : "Download"}
-              <ChevronDown size={13} style={{ marginLeft: 2 }} />
-            </button>
-            {showExportMenu && (
-              <div
-                style={{
-                  position: "absolute", right: 0, top: "calc(100% + 6px)", zIndex: 20,
-                  background: "#fff", border: `1px solid ${COLORS.line}`, borderRadius: 8,
-                  minWidth: 190, boxShadow: "0 6px 18px rgba(20,20,30,0.10)", overflow: "hidden",
-                }}
-              >
-                <ExportMenuItem icon={<FileText size={14} />} label="Download Excel" onClick={() => { setShowExportMenu(false); handleExportExcel(); }} />
-                <ExportMenuItem icon={<ImageIcon size={14} />} label="Download Image" onClick={() => { setShowExportMenu(false); handleExportImage(); }} />
-                <ExportMenuItem icon={<FileText size={14} />} label="Download PDF" onClick={() => { setShowExportMenu(false); handleExportPdf(); }} />
-              </div>
-            )}
-          </div>
+          <button
+            onClick={handleExportExcel}
+            title="Download this employee's month as an Excel file"
+            style={{
+              display: "flex", alignItems: "center", gap: 6,
+              background: "#fff", border: `1px solid ${COLORS.line}`, borderRadius: 8,
+              padding: "7px 13px", fontSize: 13, fontWeight: 700, color: COLORS.ink, cursor: "pointer",
+            }}
+          >
+            <Download size={14} /> Download Excel
+          </button>
         </div>
         <table className="rv-table-hover" style={{ width: "100%", borderCollapse: "collapse", minWidth: 940 }}>
           <thead>
@@ -392,8 +314,7 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
               <th style={th}>Date</th><th style={th}>Status</th><th style={th}>Check-in</th>
               <th style={th}>Check-out</th><th style={th}>Office Hours</th>
               <th style={th}>WFH in</th><th style={th}>WFH out</th><th style={th}>WFH Hours</th>
-              <th style={th}>Total Hours</th><th style={th}>Notes</th>
-              <th style={th} data-export-ignore="true">Status-Edit</th><th style={th} data-export-ignore="true"></th>
+              <th style={th}>Total Hours</th><th style={th}>Notes</th><th style={th}>Status-Edit</th><th style={th}></th>
             </tr>
           </thead>
           <tbody>
@@ -466,7 +387,7 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
                       </span>
                     )}
                   </td>
-                  <td style={td} data-export-ignore="true">
+                  <td style={td}>
                     <select
                       value={r.rec?.manualStatus || ""}
                       onChange={e => handleStatusChange(r.date, e.target.value)}
@@ -481,7 +402,7 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
                       </div>
                     )}
                   </td>
-                  <td style={{ ...td, textAlign: "right" }} data-export-ignore="true">
+                  <td style={{ ...td, textAlign: "right" }}>
                     <button
                       onClick={() => setEditingDate(r.date)}
                       title="Correct this day's attendance"
@@ -767,23 +688,6 @@ function EditAttendanceModal({ date, emp, rec, onClose, onSave, onUpdateShift })
         </div>
       </div>
     </div>
-  );
-}
-
-function ExportMenuItem({ icon, label, onClick }) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        display: "flex", alignItems: "center", gap: 8, width: "100%",
-        background: "none", border: "none", cursor: "pointer", textAlign: "left",
-        padding: "9px 13px", fontSize: 13, fontWeight: 600, color: COLORS.ink,
-      }}
-      onMouseEnter={(e) => (e.currentTarget.style.background = "#F5F6FA")}
-      onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
-    >
-      {icon} {label}
-    </button>
   );
 }
 
