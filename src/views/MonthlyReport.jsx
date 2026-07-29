@@ -2,16 +2,9 @@ import React, { useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import { ChevronLeft, ChevronRight, Coffee, Repeat, Home, Pencil, X, CalendarHeart, Download } from "lucide-react";
 import { COLORS, MANUAL_STATUS_OPTIONS } from "../lib/constants";
-import { computeStatus, fmtTime, fmtHrs, monthKey, daysInMonth, todayStr } from "../lib/utils";
+import { computeStatus, isFlaggedNotARealCheckIn, fmtTime, fmtHrs, monthKey, daysInMonth, todayStr } from "../lib/utils";
 import { StatusPill, StatCard, selectStyle, th, td } from "../components/ui";
 
-// cdata.js flags a lone punch that lands well after shift_end (with no
-// earlier punch that day) by prefixing its auto-note with "Auto-flag:" —
-// it still has to store the raw punch time SOMEWHERE (check_in is the
-// only field a first punch of the day can land in), but it's really a
-// checkout with a missed/lost check-in, not a genuine check-in. Detect
-// that here so the table shows "No check-in" instead of presenting the
-// evening time as if someone arrived then.
 // Nicer look for the Status-Edit dropdown and the employee/month pickers —
 // layered on top of the shared `selectStyle` from components/ui so we don't
 // need to touch that file. Custom chevron + colored border on focus/value.
@@ -57,10 +50,6 @@ function leaveCodeFor(rec) {
   if (has("al") || notes.includes("annual leave")) return "AL";
   if (notes.includes("short leave")) return "ShortLeave";
   return null;
-}
-
-function isFlaggedNotARealCheckIn(rec) {
-  return !!(rec?.notes && rec.notes.startsWith("Auto-flag:") && rec?.checkIn && !rec?.checkOut);
 }
 
 // A day can have up to three separate in/out sessions — office, WFH, and a
@@ -151,16 +140,28 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
 
   const leaves = rows.filter(r => r.status.tone === "leave");
   const alternates = rows.filter(r => r.rec?.alternateDay);
-  const noCheckouts = rows.filter(r => (r.rec?.checkIn && !r.rec?.checkOut) || (r.rec?.wfhCheckIn && !r.rec?.wfhCheckOut));
+  // A row belongs to whichever side is actually missing a punch — never
+  // both lists at once. The auto-flagged case (see isFlaggedNotARealCheckIn)
+  // is a missing check-in wearing a checkIn-field disguise, so it's routed
+  // to noCheckins rather than noCheckouts even though rec.checkIn is set.
+  const noCheckouts = rows.filter(r =>
+    !isFlaggedNotARealCheckIn(r.rec) &&
+    ((r.rec?.checkIn && !r.rec?.checkOut) || (r.rec?.wfhCheckIn && !r.rec?.wfhCheckOut))
+  );
+  const noCheckins = rows.filter(r =>
+    isFlaggedNotARealCheckIn(r.rec) ||
+    (!r.rec?.checkIn && !!r.rec?.checkOut) || (!r.rec?.wfhCheckIn && !!r.rec?.wfhCheckOut)
+  );
 
   const stats = useMemo(() => {
-    let present = 0, late = 0, half = 0, noCheckout = 0, wfh = 0, leave = 0, absent = 0, totalHours = 0, workedDays = 0;
+    let present = 0, late = 0, half = 0, noCheckout = 0, noCheckin = 0, wfh = 0, leave = 0, absent = 0, totalHours = 0, workedDays = 0;
     let shortLeave = 0, cl = 0, sl = 0, al = 0;
     rows.forEach(r => {
       if (r.status.tone === "present") present++;
       else if (r.status.tone === "late") { present++; late++; }
       else if (r.status.tone === "half") half++;
       else if (r.status.tone === "no_checkout") noCheckout++;
+      else if (r.status.tone === "no_checkin") noCheckin++;
       else if (r.status.tone === "wfh") wfh++;
       else if (r.status.tone === "leave") leave++;
       else if (r.status.tone === "absent") absent++;
@@ -177,10 +178,10 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
       const dayHours = Number.isFinite(Number(rawDayHours)) ? Number(rawDayHours) : 0;
       if (dayHours > 0) { totalHours += dayHours; workedDays++; }
     });
-    const markedDays = present + half + noCheckout + wfh + absent;
+    const markedDays = present + half + noCheckout + noCheckin + wfh + absent;
     const attendancePct = markedDays ? Math.round(((present + half + wfh) / markedDays) * 100) : null;
     const avgHours = workedDays && Number.isFinite(totalHours / workedDays) ? totalHours / workedDays : 0;
-    return { present, late, half, noCheckout, wfh, leave, absent, shortLeave, cl, sl, al, avgHours, attendancePct };
+    return { present, late, half, noCheckout, noCheckin, wfh, leave, absent, shortLeave, cl, sl, al, avgHours, attendancePct };
   }, [rows]);
 
   // Status-Edit dropdown — lets HR override the auto-calculated status for
@@ -210,17 +211,20 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
       const hours = (hasAnySession(r.rec) || r.rec?.manualTotalHours != null) ? dayHours : null;
       const wfhHoursShown = (r.rec?.wfhCheckIn && r.rec?.wfhCheckOut) || r.rec?.manualWfhHours != null;
       const flaggedNotReal = isFlaggedNotARealCheckIn(r.rec);
+      const officeCheckinMissing = !flaggedNotReal && !r.rec?.checkIn && !!r.rec?.checkOut;
+      const wfhCheckinMissing = !r.rec?.wfhCheckIn && !!r.rec?.wfhCheckOut;
 
       return {
         Date: new Date(r.date + "T00:00:00").toLocaleDateString([], { weekday: "short", year: "numeric", month: "short", day: "numeric" }),
         Status: r.status?.label || "",
-        "Check-in": flaggedNotReal ? "No check-in" : (r.rec?.checkIn ? fmtTime(r.rec.checkIn) : ""),
+        "Check-in": flaggedNotReal ? "No check-in" : officeCheckinMissing ? "No check-in" : (r.rec?.checkIn ? fmtTime(r.rec.checkIn) : ""),
         "Check-out": flaggedNotReal
           ? `${fmtTime(r.rec.checkIn)} (likely checkout — no check-in recorded)`
+          : officeCheckinMissing ? fmtTime(r.rec.checkOut)
           : r.rec?.checkIn ? (r.rec?.checkOut ? fmtTime(r.rec.checkOut) : "No checkout") : "",
         "Office Hours": (r.rec?.checkIn && r.rec?.checkOut) ? Number(officeHours.toFixed(2)) : "",
-        "WFH in": r.rec?.wfhCheckIn ? fmtTime(r.rec.wfhCheckIn) : "",
-        "WFH out": r.rec?.wfhCheckIn ? (r.rec?.wfhCheckOut ? fmtTime(r.rec.wfhCheckOut) : "No checkout") : "",
+        "WFH in": wfhCheckinMissing ? "No check-in" : (r.rec?.wfhCheckIn ? fmtTime(r.rec.wfhCheckIn) : ""),
+        "WFH out": r.rec?.wfhCheckIn ? (r.rec?.wfhCheckOut ? fmtTime(r.rec.wfhCheckOut) : "No checkout") : (wfhCheckinMissing ? fmtTime(r.rec.wfhCheckOut) : ""),
         "WFH Hours": wfhHoursShown ? Number(wfhHours.toFixed(2)) : "",
         "Total Hours": hours != null ? Number(hours.toFixed(2)) : "",
         Notes: noteSummaryFor(r, holidayByDate),
@@ -272,6 +276,7 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
         <StatCard label="Avg hrs/day" value={stats.avgHours ? stats.avgHours.toFixed(1) + "h" : "—"} tone="pending" />
         <StatCard label="Alternate days worked" value={alternates.length} tone="present" />
         <StatCard label="Missing checkouts" value={noCheckouts.length} tone="half" />
+        <StatCard label="Missing check-ins" value={noCheckins.length} tone="half" />
         <StatCard label="Days recorded" value={rows.filter(r => r.rec).length} tone="pending" />
       </div>
 
@@ -327,12 +332,14 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
               const rowLeaveCode = leaveCodeFor(r.rec);
               const missedCheckout = (r.rec?.checkIn && !r.rec?.checkOut) || (r.rec?.wfhCheckIn && !r.rec?.wfhCheckOut);
               const flaggedNotReal = isFlaggedNotARealCheckIn(r.rec);
+              const officeCheckinMissing = !flaggedNotReal && !r.rec?.checkIn && !!r.rec?.checkOut;
+              const wfhCheckinMissing = !r.rec?.wfhCheckIn && !!r.rec?.wfhCheckOut;
               return (
                 <tr key={r.date} className="rv-row-in" style={{ borderTop: `1px solid ${COLORS.line}`, animationDelay: `${i * 25}ms` }}>
                   <td style={td}>{new Date(r.date + "T00:00:00").toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}</td>
                   <td style={td}><StatusPill {...r.status} /></td>
-                  <td style={{ ...td, color: flaggedNotReal ? COLORS.red : COLORS.muted, fontWeight: flaggedNotReal ? 700 : 400 }}>
-                    {flaggedNotReal ? "No check-in" : fmtTime(r.rec?.checkIn)}
+                  <td style={{ ...td, color: (flaggedNotReal || officeCheckinMissing) ? COLORS.red : COLORS.muted, fontWeight: (flaggedNotReal || officeCheckinMissing) ? 700 : 400 }}>
+                    {flaggedNotReal ? "No check-in" : officeCheckinMissing ? "No check-in" : fmtTime(r.rec?.checkIn)}
                   </td>
                   <td style={{ ...td, color: (missedCheckout && !flaggedNotReal) ? COLORS.red : COLORS.muted, fontWeight: (missedCheckout && !flaggedNotReal) ? 700 : 400 }}>
                     {flaggedNotReal
@@ -342,7 +349,9 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
                   <td style={{ ...td, color: COLORS.muted }}>
                     {(r.rec?.checkIn && r.rec?.checkOut) ? fmtHrs(officeHours) : "—"}
                   </td>
-                  <td style={{ ...td, color: COLORS.muted }}>{fmtTime(r.rec?.wfhCheckIn)}</td>
+                  <td style={{ ...td, color: wfhCheckinMissing ? COLORS.red : COLORS.muted, fontWeight: wfhCheckinMissing ? 700 : 400 }}>
+                    {wfhCheckinMissing ? "No check-in" : fmtTime(r.rec?.wfhCheckIn)}
+                  </td>
                   <td style={{ ...td, color: missedCheckout ? COLORS.red : COLORS.muted, fontWeight: missedCheckout ? 700 : 400 }}>
                     {r.rec?.wfhCheckIn ? (r.rec?.wfhCheckOut ? fmtTime(r.rec.wfhCheckOut) : "No checkout") : "—"}
                   </td>

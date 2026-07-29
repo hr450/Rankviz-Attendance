@@ -40,6 +40,17 @@ export const MANUAL_STATUS_LABELS = {
   short_leave: "Short Leave", holiday: "Holiday", absent: "Absent",
 };
 
+// cdata.js flags a lone punch that lands well after shift_end (with no
+// earlier punch that day) by prefixing its auto-note with "Auto-flag:" —
+// it still has to store the raw punch time SOMEWHERE (check_in is the only
+// field a first punch of the day can land in), but it's really a checkout
+// with a missed/lost check-in, not a genuine check-in. Shared here so both
+// the Status pill (computeStatus) and the table cells that render the raw
+// time (MonthlyReport.jsx) agree on which rows this applies to.
+export function isFlaggedNotARealCheckIn(rec) {
+  return !!(rec?.notes && rec.notes.startsWith("Auto-flag:") && rec?.checkIn && !rec?.checkOut);
+}
+
 // rec: {checkIn, checkOut, type, wfhCheckIn, wfhCheckOut, alternateDay, manualStatus}
 // dateStr: "YYYY-MM-DD" for the day being evaluated — needed to detect weekends
 export function computeStatus(emp, rec, isPastDay, nowMinutes, dateStr) {
@@ -50,9 +61,10 @@ export function computeStatus(emp, rec, isPastDay, nowMinutes, dateStr) {
     return { label: MANUAL_STATUS_LABELS[rec.manualStatus] || rec.manualStatus, tone: rec.manualStatus, manual: true };
   }
 
-  const hasOfficePunch = !!rec?.checkIn;
-  const hasWfhPunch = !!rec?.wfhCheckIn;
-  const workedAnyway = hasOfficePunch || hasWfhPunch || rec?.alternateDay;
+  const autoFlaggedCheckout = isFlaggedNotARealCheckIn(rec);
+  const hasOfficeIn = !!rec?.checkIn, hasOfficeOut = !!rec?.checkOut;
+  const hasWfhIn = !!rec?.wfhCheckIn, hasWfhOut = !!rec?.wfhCheckOut;
+  const workedAnyway = hasOfficeIn || hasOfficeOut || hasWfhIn || hasWfhOut || rec?.alternateDay;
 
   // Weekend with nothing logged → Holiday (not Leave, not Absent)
   if (dateStr) {
@@ -65,14 +77,37 @@ export function computeStatus(emp, rec, isPastDay, nowMinutes, dateStr) {
   // Only an explicit leave record counts as Leave
   if (rec?.type === "leave") return { label: "Leave", tone: "leave" };
 
-  if (!hasOfficePunch && !hasWfhPunch) {
+  if (!workedAnyway) {
     // No record at all — stays blank whether it's today or a past weekday
     return { label: "", tone: "blank" };
   }
 
-  if (hasWfhPunch && !hasOfficePunch) {
-    if (!rec.wfhCheckOut) return { label: "WFH · No checkout", tone: "wfh" };
+  // A lone evening punch that cdata.js couldn't tell apart from a real
+  // check-in is really a checkout with a missed/lost check-in — flag it
+  // that way instead of treating the stored time as an arrival.
+  if (autoFlaggedCheckout) {
+    return { label: "No check-in", tone: "no_checkin" };
+  }
+
+  // From here, "missing" is derived purely by comparing check-in vs
+  // check-out on whichever side (office or WFH) has activity — never an
+  // independently-decided status.
+  if (hasOfficeIn || hasOfficeOut) {
+    if (!hasOfficeIn && hasOfficeOut) {
+      return { label: "No check-in", tone: "no_checkin" };
+    }
+    // else hasOfficeIn is true — falls through to the full present/late/half
+    // logic below, which already derives "No checkout" from checkOut alone.
+  } else if (hasWfhIn || hasWfhOut) {
+    if (hasWfhIn && !hasWfhOut) return { label: "WFH · No checkout", tone: "wfh" };
+    if (!hasWfhIn && hasWfhOut) return { label: "No check-in", tone: "no_checkin" };
     return { label: "WFH", tone: "wfh" };
+  }
+
+  if (!hasOfficeIn) {
+    // Nothing left unaccounted for (e.g. an alternateDay flag with no
+    // punches at all) — stays blank as before.
+    return { label: "", tone: "blank" };
   }
 
   const inMin = minutesOfDay(rec.checkIn);
@@ -98,6 +133,7 @@ export const TONE_STYLES = {
   late: { bg: "#FBF0DC", fg: "#D99A2B", dot: "#D99A2B" },
   half: { bg: "#FBF0DC", fg: "#D99A2B", dot: "#D99A2B" },
   no_checkout: { bg: "#FDEDE3", fg: "#D97A3F", dot: "#D97A3F" },
+  no_checkin: { bg: "#FCE8E8", fg: "#C0392B", dot: "#C0392B" },
   absent: { bg: "#FBE8E7", fg: "#D9534F", dot: "#D9534F" },
   leave: { bg: "#E9EEFC", fg: "#3E5A9E", dot: "#3E5A9E" },
   short_leave: { bg: "#EFEAFB", fg: "#6C4FC9", dot: "#6C4FC9" },
