@@ -157,19 +157,34 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
     let present = 0, late = 0, half = 0, noCheckout = 0, noCheckin = 0, wfh = 0, leave = 0, absent = 0, totalHours = 0, workedDays = 0;
     let shortLeave = 0, cl = 0, sl = 0, al = 0;
     rows.forEach(r => {
+      const code = leaveCodeFor(r.rec);
+      // Half day and Short Leave take priority over Late — a day that's
+      // already a half day or a short leave shouldn't also count as Late.
+      // Half day + a real WFH session counts toward BOTH Half day and WFH.
+      const isHalfDay = r.status.tone === "half" || r.rec?.manualStatus === "half";
+      const isShortLeave = code === "ShortLeave";
+      const hasWfhSession = !!(r.rec?.wfhCheckIn && r.rec?.wfhCheckOut);
+
       if (r.status.tone === "present") present++;
-      else if (r.status.tone === "late") { present++; late++; }
-      else if (r.status.tone === "half") half++;
+      else if (r.status.tone === "late") {
+        present++;
+        if (!isHalfDay && !isShortLeave) late++;
+      }
       else if (r.status.tone === "no_checkout") noCheckout++;
       else if (r.status.tone === "no_checkin") noCheckin++;
       else if (r.status.tone === "wfh") wfh++;
       else if (r.status.tone === "leave") leave++;
       else if (r.status.tone === "absent") absent++;
-      const code = leaveCodeFor(r.rec);
+
+      if (isHalfDay) {
+        half++;
+        if (hasWfhSession) wfh++;
+      }
+
       if (code === "CL") cl++;
       else if (code === "SL") sl++;
       else if (code === "AL") al++;
-      else if (code === "ShortLeave") shortLeave++;
+      else if (isShortLeave) shortLeave++;
       const rawDayHours = r.rec?.manualTotalHours != null ? r.rec.manualTotalHours : totalWorkedHours(r.rec);
       // Guard against any legacy/corrupted manualTotalHours value (e.g. a
       // non-numeric string saved before the Status-Edit validation existed)
