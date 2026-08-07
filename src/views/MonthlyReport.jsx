@@ -543,6 +543,9 @@ function EditAttendanceModal({ date, emp, rec, onClose, onSave, onUpdateShift })
   const [showShift, setShowShift] = useState(false);
   const [shiftStart, setShiftStart] = useState(emp.shiftStart || "09:30");
   const [shiftEnd, setShiftEnd] = useState(emp.shiftEnd || "18:30");
+  const [graceMinutes, setGraceMinutes] = useState(
+    emp.graceMinutes !== undefined && emp.graceMinutes !== null ? String(emp.graceMinutes) : ""
+  );
   const [showHours, setShowHours] = useState(rec?.manualWfhHours != null || rec?.manualTotalHours != null);
   const [wfhHoursOverride, setWfhHoursOverride] = useState(rec?.manualWfhHours != null ? String(rec.manualWfhHours) : "");
   const [totalHoursOverride, setTotalHoursOverride] = useState(rec?.manualTotalHours != null ? String(rec.manualTotalHours) : "");
@@ -569,8 +572,10 @@ function EditAttendanceModal({ date, emp, rec, onClose, onSave, onUpdateShift })
     }
     setSaving(true);
     try {
-      if (showShift && (shiftStart !== emp.shiftStart || shiftEnd !== emp.shiftEnd)) {
-        await onUpdateShift(emp.id, shiftStart, shiftEnd);
+      const shiftChanged = shiftStart !== emp.shiftStart || shiftEnd !== emp.shiftEnd;
+      const graceChanged = graceMinutes !== (emp.graceMinutes !== undefined && emp.graceMinutes !== null ? String(emp.graceMinutes) : "");
+      if (showShift && (shiftChanged || graceChanged)) {
+        await onUpdateShift(emp.id, shiftStart, shiftEnd, graceMinutes);
       }
       const patch = { checkIn: inVal, checkOut: outVal, notes };
       if (showSecond) {
@@ -654,6 +659,18 @@ function EditAttendanceModal({ date, emp, rec, onClose, onSave, onUpdateShift })
                   <input type="time" value={shiftEnd} onChange={e => setShiftEnd(e.target.value)} style={inputStyle} />
                 </Field>
               </div>
+              <Field label="Grace period (minutes)">
+                <input
+                  type="number" min="0" step="1"
+                  value={graceMinutes}
+                  onChange={e => setGraceMinutes(e.target.value)}
+                  style={inputStyle}
+                  placeholder="Default: 15"
+                />
+              </Field>
+              <p style={{ margin: "-6px 0 0", fontSize: 11.5, color: COLORS.muted }}>
+                Minutes after Shift start before it counts as Late. Leave blank for the app-wide default (15 min).
+              </p>
               <p style={{ margin: "-6px 0 0", fontSize: 11.5, color: COLORS.muted }}>
                 This updates {empName}'s standing shift going forward — not just this one day.
               </p>

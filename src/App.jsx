@@ -200,13 +200,17 @@ export default function App() {
      App's local `employees` state — so computeStatus() kept using the old
      shift until a full page reload. Routing it through here means the local
      state updates immediately, so Late/Present statuses in both Monthly
-     Report and the Employees tab recalculate right away. */
-  const updateShift = useCallback(async (employeeId, shiftStart, shiftEnd) => {
+     Report and the Employees tab recalculate right away. graceMinutes is
+     optional (undefined = don't touch it) so existing callers that only
+     pass shiftStart/shiftEnd keep working unchanged. */
+  const updateShift = useCallback(async (employeeId, shiftStart, shiftEnd, graceMinutes) => {
     setSaveState("saving");
     try {
-      await updateEmployeeShift(employeeId, shiftStart, shiftEnd);
+      await updateEmployeeShift(employeeId, shiftStart, shiftEnd, graceMinutes);
       setEmployees(prev => prev.map(e =>
-        e.id === employeeId ? { ...e, shiftStart, shiftEnd } : e
+        e.id === employeeId
+          ? { ...e, shiftStart, shiftEnd, ...(graceMinutes !== undefined ? { graceMinutes } : {}) }
+          : e
       ));
       setSaveState("saved");
     } catch (e) {

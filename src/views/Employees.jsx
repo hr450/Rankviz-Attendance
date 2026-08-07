@@ -121,7 +121,12 @@ export default function EmployeesView({ employees, setEmployees, accounts, refre
                   <td style={td}><strong>{emp.name}</strong></td>
                   <td style={{ ...td, color: COLORS.muted }}>{emp.department}</td>
                   <td style={{ ...td, color: COLORS.muted }}>{emp.employmentType}</td>
-                  <td style={{ ...td, color: COLORS.muted }}>{emp.shiftStart}–{emp.shiftEnd}</td>
+                  <td style={{ ...td, color: COLORS.muted }}>
+                    {emp.shiftStart}–{emp.shiftEnd}
+                    {emp.graceMinutes !== undefined && emp.graceMinutes !== null && emp.graceMinutes !== "" && (
+                      <span style={{ fontSize: 11, marginLeft: 6, color: COLORS.amber }}>+{emp.graceMinutes}m grace</span>
+                    )}
+                  </td>
                   <td style={td}>
                     <span style={{
                       fontSize: 11.5, fontWeight: 700, padding: "3px 9px", borderRadius: 999,
@@ -179,6 +184,7 @@ function EmployeeModal({ initial, onClose, onSave }) {
     id: initial.id, name: initial.name || "", department: initial.department || DEPARTMENTS[0],
     employmentType: initial.employmentType || "Full-time",
     shiftStart: initial.shiftStart || "09:30", shiftEnd: initial.shiftEnd || "18:30",
+    graceMinutes: initial.graceMinutes !== undefined && initial.graceMinutes !== null ? String(initial.graceMinutes) : "",
     zkUserId: initial.zkUserId || "",
   });
 
@@ -205,6 +211,15 @@ function EmployeeModal({ initial, onClose, onSave }) {
           <input type="time" value={form.shiftEnd} onChange={e => setForm({ ...form, shiftEnd: e.target.value })} style={inputStyle} />
         </Field>
       </div>
+      <Field label="Grace period (minutes)" hint="Minutes after Shift start before it counts as Late. Leave blank to use the app-wide default (15 min).">
+        <input
+          type="number" min="0" step="1"
+          value={form.graceMinutes}
+          onChange={e => setForm({ ...form, graceMinutes: e.target.value })}
+          style={inputStyle}
+          placeholder="Default: 15"
+        />
+      </Field>
       <Field label="ZK Device ID (optional)">
         <input value={form.zkUserId} onChange={e => setForm({ ...form, zkUserId: e.target.value })} style={inputStyle} placeholder="e.g. 7" />
       </Field>

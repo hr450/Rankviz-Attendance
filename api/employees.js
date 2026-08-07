@@ -9,6 +9,10 @@ function empToRow(e) {
   return {
     id: e.id, name: e.name, department: e.department,
     employment_type: e.employmentType, shift_start: e.shiftStart, shift_end: e.shiftEnd,
+    // null (not 0) means "use the app-wide GRACE_MIN default" — only a real
+    // number here overrides it for this specific employee.
+    grace_minutes: (e.graceMinutes !== undefined && e.graceMinutes !== null && e.graceMinutes !== "")
+      ? Number(e.graceMinutes) : null,
     zk_user_id: e.zkUserId || null, active: e.active !== false,
   };
 }
@@ -16,6 +20,7 @@ function rowToEmp(r) {
   return {
     id: r.id, name: r.name, department: r.department,
     employmentType: r.employment_type, shiftStart: r.shift_start, shiftEnd: r.shift_end,
+    graceMinutes: r.grace_minutes != null ? r.grace_minutes : "",
     zkUserId: r.zk_user_id || "", active: r.active !== false,
   };
 }

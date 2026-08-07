@@ -112,7 +112,14 @@ export function computeStatus(emp, rec, isPastDay, nowMinutes, dateStr) {
 
   const inMin = minutesOfDay(rec.checkIn);
   const shiftStartMin = timeToMinutes(emp.shiftStart);
-  const isLate = inMin > shiftStartMin + GRACE_MIN;
+  // Per-employee grace period (set on the Employees tab or Monthly Report's
+  // "+ Change shift") overrides the global GRACE_MIN default when present —
+  // some employees genuinely need 45 min, others 5 min, so one flat number
+  // for everyone doesn't work.
+  const graceMin = (emp.graceMinutes !== undefined && emp.graceMinutes !== null && emp.graceMinutes !== "")
+    ? Number(emp.graceMinutes)
+    : GRACE_MIN;
+  const isLate = inMin > shiftStartMin + graceMin;
   let hours = null;
   if (rec.checkOut) hours = (new Date(rec.checkOut) - new Date(rec.checkIn)) / 3600000;
 

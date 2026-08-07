@@ -97,12 +97,19 @@ export async function saveEmployees(next, prev) {
 }
 
 // Used by Monthly Report's "Change shift" option in the correction modal.
-export async function updateEmployeeShift(employeeId, shiftStart, shiftEnd) {
+export async function updateEmployeeShift(employeeId, shiftStart, shiftEnd, graceMinutes) {
   // Still direct — TODO: move to a server route alongside employees.js
   // before the RLS lockdown SQL runs.
+  const body = { shift_start: shiftStart, shift_end: shiftEnd };
+  // Only touch grace_minutes if the caller actually passed something for it
+  // (undefined = leave whatever's already saved alone). "" or null clears
+  // the override back to the app-wide GRACE_MIN default.
+  if (graceMinutes !== undefined) {
+    body.grace_minutes = (graceMinutes === "" || graceMinutes === null) ? null : Number(graceMinutes);
+  }
   await supaFetch(`employees?id=eq.${encodeURIComponent(employeeId)}`, {
     method: "PATCH",
-    body: JSON.stringify({ shift_start: shiftStart, shift_end: shiftEnd }),
+    body: JSON.stringify(body),
   });
 }
 
