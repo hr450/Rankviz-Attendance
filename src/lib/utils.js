@@ -56,7 +56,9 @@ export function isFlaggedNotARealCheckIn(rec) {
 export function computeStatus(emp, rec, isPastDay, nowMinutes, dateStr) {
   // A manual override (set from the Monthly Report's Status-Edit dropdown)
   // wins outright — skip the check-in/check-out calculation entirely so HR's
-  // explicit choice is never second-guessed by the auto logic.
+  // explicit choice is never second-guessed by the auto logic. This is also
+  // why Short Leave never carries a "Late" tag: Short Leave only ever comes
+  // from this manual override path, which returns before any late check runs.
   if (rec?.manualStatus) {
     return { label: MANUAL_STATUS_LABELS[rec.manualStatus] || rec.manualStatus, tone: rec.manualStatus, manual: true };
   }
@@ -101,7 +103,17 @@ export function computeStatus(emp, rec, isPastDay, nowMinutes, dateStr) {
   } else if (hasWfhIn || hasWfhOut) {
     if (hasWfhIn && !hasWfhOut) return { label: "WFH · No checkout", tone: "wfh" };
     if (!hasWfhIn && hasWfhOut) return { label: "No check-in", tone: "no_checkin" };
-    return { label: "WFH", tone: "wfh" };
+
+    // Both WFH punches present — WFH does NOT exempt someone from being
+    // late. Compare the WFH check-in against the same shift-start + grace
+    // window used for office check-ins, so "WFH" and "Late" can both apply.
+    const wfhInMin = minutesOfDay(rec.wfhCheckIn);
+    const shiftStartMin = timeToMinutes(emp.shiftStart);
+    const graceMin = (emp.graceMinutes !== undefined && emp.graceMinutes !== null && emp.graceMinutes !== "")
+      ? Number(emp.graceMinutes)
+      : GRACE_MIN;
+    const wfhLate = wfhInMin > shiftStartMin + graceMin;
+    return { label: wfhLate ? "WFH · Late" : "WFH", tone: "wfh" };
   }
 
   if (!hasOfficeIn) {
@@ -128,7 +140,10 @@ export function computeStatus(emp, rec, isPastDay, nowMinutes, dateStr) {
     return { label: "No checkout", tone: "no_checkout" };
   }
   if (hours != null && hours < HALFDAY_HOURS) {
-    return { label: `Half Day${isLate ? " · Late" : ""}`, tone: "half" };
+    // Half Day never carries a "Late" suffix — a partial day already
+    // accounts for reduced attendance, so lateness isn't double-counted
+    // on top of it.
+    return { label: "Half Day", tone: "half" };
   }
   if (isLate) return { label: "Late", tone: "late" };
   return { label: "Present", tone: "present" };
