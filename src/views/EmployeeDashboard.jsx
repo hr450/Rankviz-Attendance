@@ -685,6 +685,47 @@ function PunchErrorBanner({ message }) {
   );
 }
 
+function MonthAccordionSection({ ym, employee, attendance, now, currentYm, renderRow }) {
+  const [open, setOpen] = useState(false);
+  const totalDays = daysInMonth(ym);
+  const lastDay = ym === currentYm ? now.getDate() : totalDays;
+  const days = [];
+  for (let d = lastDay; d >= 1; d--) days.push(`${ym}-${String(d).padStart(2, "0")}`);
+
+  const monthTotals = useMemo(
+    () => tallyEmployeeMonth(employee, attendance, ym, todayStr(now), now.getHours() * 60 + now.getMinutes()),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [employee, attendance, ym]
+  );
+  const leaveCount = monthTotals.cl + monthTotals.al + monthTotals.sl;
+  const label = new Date(ym + "-01T00:00:00").toLocaleDateString([], { month: "long", year: "numeric" });
+
+  return (
+    <div style={{ borderBottom: "1px solid var(--rv-line)" }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+          background: "none", border: "none", cursor: "pointer", padding: "11px 16px", textAlign: "left",
+        }}
+      >
+        <span style={{ fontSize: 13.5, fontWeight: 700, color: "var(--rv-ink)" }}>{label}</span>
+        <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 11.5, color: "var(--rv-muted)", fontWeight: 600 }}>
+            {leaveCount > 0 ? `${leaveCount} leave day${leaveCount === 1 ? "" : "s"}` : "No leave"}
+          </span>
+          <ChevronDown size={15} style={{ color: "var(--rv-muted)", transition: "transform 0.2s ease", transform: open ? "rotate(180deg)" : "rotate(0deg)" }} />
+        </span>
+      </button>
+      {open && (
+        <div className="rv-anim-fadein" style={{ padding: "0 4px 8px" }}>
+          {days.map(renderRow)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function RecentActivity({ employee, attendance, now, period }) {
   const listRef = useRef(null);
 
@@ -698,8 +739,6 @@ function RecentActivity({ employee, attendance, now, period }) {
   const todayFull = todayStr(now);
   const currentYm = monthKey(todayFull);
 
-  // "annual" would mean generating 250+ rows, which isn't a useful list to
-  // scan — point people at a specific month instead of rendering it.
   const isAnnual = period === "annual" || !period;
 
   // Every day in the selected month (only up through today, if it's the
@@ -717,6 +756,17 @@ function RecentActivity({ employee, attendance, now, period }) {
     return days;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [period, currentYm, now.getDate()]);
+
+  // Every month of the selected year, from the current month back to
+  // January, most recent first — used for the Annual view's accordion.
+  const annualMonths = useMemo(() => {
+    if (!isAnnual) return [];
+    const year = now.getFullYear();
+    const lastMonth = now.getMonth() + 1; // 1-12
+    const months = [];
+    for (let m = lastMonth; m >= 1; m--) months.push(`${year}-${String(m).padStart(2, "0")}`);
+    return months;
+  }, [isAnnual, now]);
 
   const DOT_COLOR = {
     present: "#2F9E6E", late: "#D99A2B", wfh: "#2F6FED",
@@ -763,15 +813,17 @@ function RecentActivity({ employee, attendance, now, period }) {
   const monthLabel = !isAnnual
     ? new Date(period + "-01T00:00:00").toLocaleDateString([], { month: "long", year: "numeric" })
     : null;
-  const heading = isAnnual ? "Recent activity" : (period === currentYm ? "Recent activity" : monthLabel);
+  const heading = isAnnual ? `Recent activity — ${now.getFullYear()}` : (period === currentYm ? "Recent activity" : monthLabel);
 
   return (
     <div className="rv-stagger rv-stagger-4" style={{ marginTop: 26 }}>
       <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 10, color: "var(--rv-ink)" }}>{heading}</div>
       <div className="rv-card rv-dark-card" style={{ padding: "6px 4px", borderRadius: 16 }}>
         {isAnnual ? (
-          <div style={{ padding: "24px 16px", textAlign: "center", fontSize: 13, color: "var(--rv-muted)", fontWeight: 600 }}>
-            Pick a specific month above to see day-by-day records.
+          <div style={{ maxHeight: 340, overflowY: "auto", overflowX: "hidden" }}>
+            {annualMonths.map(ym => (
+              <MonthAccordionSection key={ym} ym={ym} employee={employee} attendance={attendance} now={now} currentYm={currentYm} renderRow={renderRow} />
+            ))}
           </div>
         ) : (
           <div
