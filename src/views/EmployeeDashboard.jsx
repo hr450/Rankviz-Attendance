@@ -1176,6 +1176,92 @@ function HelpDeskPane({ employee }) {
   );
 }
 
+/* Custom-styled dropdown used for "Leave type" — replaces the plain
+   browser <select> with a themed panel (rounded, animated, checkmark
+   on the selected row) that matches the rest of the app's look. */
+function CustomSelect({ value, onChange, options, placeholder }) {
+  const [open, setOpen] = useState(false);
+  const [visible, setVisible] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    function handleClick(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  useEffect(() => {
+    if (open) {
+      const t = setTimeout(() => setVisible(true), 10);
+      return () => clearTimeout(t);
+    }
+    setVisible(false);
+  }, [open]);
+
+  const selected = options.find(o => o.value === value);
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        style={{
+          ...inputStyle,
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          width: "100%", cursor: "pointer", userSelect: "none", textAlign: "left",
+          boxShadow: open ? `0 0 0 3px ${COLORS.blue}22` : "none",
+          borderColor: open ? COLORS.blue : inputStyle.borderColor,
+        }}
+      >
+        <span style={{ color: selected ? COLORS.navy : COLORS.muted, fontWeight: 600, fontSize: 14 }}>
+          {selected ? selected.label : (placeholder || "Select…")}
+        </span>
+        <ChevronDown
+          size={16}
+          style={{ color: COLORS.muted, transition: "transform 0.2s ease", transform: open ? "rotate(180deg)" : "rotate(0deg)", flexShrink: 0, marginLeft: 8 }}
+        />
+      </button>
+
+      {open && (
+        <div
+          style={{
+            position: "absolute", top: "calc(100% + 6px)", left: 0, right: 0, zIndex: 70,
+            background: "#fff", borderRadius: 12, border: "1px solid #E7EAF3",
+            boxShadow: "0 14px 30px rgba(15,27,51,0.16)", padding: 6,
+            opacity: visible ? 1 : 0, transform: visible ? "translateY(0)" : "translateY(-6px)",
+            transition: "opacity 0.15s ease, transform 0.15s ease",
+            maxHeight: 240, overflowY: "auto",
+          }}
+        >
+          {options.map(o => {
+            const isSelected = o.value === value;
+            return (
+              <div
+                key={o.value}
+                onClick={() => { onChange(o.value); setOpen(false); }}
+                onMouseEnter={e => { e.currentTarget.style.background = "#F3F5FB"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = isSelected ? "#EEF1FB" : "transparent"; }}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  padding: "9px 10px", borderRadius: 8, cursor: "pointer",
+                  background: isSelected ? "#EEF1FB" : "transparent",
+                  fontSize: 13.5, fontWeight: isSelected ? 700 : 600,
+                  color: isSelected ? COLORS.blue : COLORS.navy,
+                }}
+              >
+                <span>{o.label}</span>
+                {isSelected && <Check size={14} style={{ color: COLORS.blue, flexShrink: 0, marginLeft: 8 }} />}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function LeaveApplicationModal({ leaveTypes, onClose, onSubmit }) {
   const [leaveTypeId, setLeaveTypeId] = useState(leaveTypes[0]?.id || "");
   const [startDate, setStartDate] = useState(todayStr());
@@ -1227,9 +1313,12 @@ function LeaveApplicationModal({ leaveTypes, onClose, onSubmit }) {
           </div>
         ) : (
           <Field label="Leave type">
-            <select value={leaveTypeId} onChange={e => setLeaveTypeId(e.target.value)} style={inputStyle}>
-              {leaveTypes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
+            <CustomSelect
+              value={leaveTypeId}
+              onChange={setLeaveTypeId}
+              options={leaveTypes.map(t => ({ value: t.id, label: t.name }))}
+              placeholder="Select leave type"
+            />
           </Field>
         )}
 
