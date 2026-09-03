@@ -85,10 +85,11 @@ export function computeStatus(emp, rec, isPastDay, nowMinutes, dateStr) {
   }
 
   // A lone evening punch that cdata.js couldn't tell apart from a real
-  // check-in is really a checkout with a missed/lost check-in — flag it
-  // that way instead of treating the stored time as an arrival.
+  // check-in is really a checkout with a missed/lost check-in — there IS
+  // proof of work that day, so this counts as Present, just flagged for
+  // the missing check-in punch (not treated like an absence).
   if (autoFlaggedCheckout) {
-    return { label: "No check-in", tone: "no_checkin" };
+    return { label: "Present · No check-in", tone: "no_checkin" };
   }
 
   // From here, "missing" is derived purely by comparing check-in vs
@@ -96,13 +97,17 @@ export function computeStatus(emp, rec, isPastDay, nowMinutes, dateStr) {
   // independently-decided status.
   if (hasOfficeIn || hasOfficeOut) {
     if (!hasOfficeIn && hasOfficeOut) {
-      return { label: "No check-in", tone: "no_checkin" };
+      // A real check-out with no check-in still proves the person worked
+      // that day — count it as Present, flagged for the missing punch,
+      // the same way a check-in with no check-out is Present · No checkout
+      // rather than being read as an absence.
+      return { label: "Present · No check-in", tone: "no_checkin" };
     }
     // else hasOfficeIn is true — falls through to the full present/late/half
     // logic below, which already derives "No checkout" from checkOut alone.
   } else if (hasWfhIn || hasWfhOut) {
     if (hasWfhIn && !hasWfhOut) return { label: "WFH · No checkout", tone: "wfh" };
-    if (!hasWfhIn && hasWfhOut) return { label: "No check-in", tone: "no_checkin" };
+    if (!hasWfhIn && hasWfhOut) return { label: "WFH · No check-in", tone: "no_checkin" };
 
     // Both WFH punches present — WFH does NOT exempt someone from being
     // late. Compare the WFH check-in against the same shift-start + grace
