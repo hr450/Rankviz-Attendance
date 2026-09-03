@@ -42,6 +42,13 @@ export const MANUAL_STATUS_OPTIONS = [
 
 export const HR_NOTIFY_EMAIL = "hr@rankviz.com";
 
+// Employee login uses "Sign in with Google", restricted to this domain.
+// The client ID is public/safe to expose (it identifies the app to Google,
+// it isn't a secret) — get it from Google Cloud Console > APIs & Services >
+// Credentials > OAuth 2.0 Client IDs (Web application).
+export const GOOGLE_CLIENT_ID = "PASTE_YOUR_GOOGLE_CLIENT_ID_HERE.apps.googleusercontent.com";
+export const COMPANY_EMAIL_DOMAIN = "rankviz.com";
+
 // Fill these in after running supabase_schema.sql in your Supabase project
 export const SUPABASE_URL = "https://btwvmupsezhqzidkzxun.supabase.co";
 export const SUPABASE_ANON_KEY = "sb_publishable_r7dRsMhjZKsI-J3dVzNmlw_g2toBWUT";

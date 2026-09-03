@@ -148,6 +148,17 @@ export async function verifyLogin(username, password) {
   }
 }
 
+// Employee sign-in: verifies a Google ID token server-side (see
+// api/auth/google-login.js) instead of a username/password. Throws (with a
+// useful message, e.g. "wrong domain" / "not linked to an employee") rather
+// than swallowing errors like verifyLogin() above, since the caller wants
+// to show the specific reason to the person.
+export async function verifyGoogleLogin(credential) {
+  const data = await apiFetch("/api/auth/google-login", { method: "POST", body: JSON.stringify({ credential }) });
+  setToken(data.token);
+  return data.user;
+}
+
 export async function createAdminAccount({ name, username, password }) {
   // Requires the CALLER to already be logged in as admin — enforced server-side.
   // There's no public sign-up path anymore; this is only reachable from an

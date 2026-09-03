@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import { LogIn, ShieldCheck, UserCircle2, Loader2, AlertCircle } from "lucide-react";
 import { LogoMark } from "./ui";
-import { verifyLogin } from "../lib/db";
+import { verifyLogin, verifyGoogleLogin } from "../lib/db";
+import { GOOGLE_CLIENT_ID, COMPANY_EMAIL_DOMAIN } from "../lib/constants";
 
 /* Same set of "trust" words used in the animated design's hidden-word
    spotlight layer — purely decorative, revealed near the cursor. */
@@ -89,6 +90,60 @@ export default function Login({ onLogin }) {
 
   const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }));
 
+  /* ---- Google Sign-In (employee mode) ----
+     Loads Google's Identity Services script once, then renders their
+     official button into googleBtnRef whenever we're on the employee tab.
+     The button itself only collects an ID token — the real check (is this
+     a genuine, verified @rankviz.com account, and which employee does it
+     belong to) happens server-side in /api/auth/google-login. */
+  const googleBtnRef = useRef(null);
+  const [googleReady, setGoogleReady] = useState(false);
+
+  useEffect(() => {
+    if (window.google && window.google.accounts && window.google.accounts.id) {
+      setGoogleReady(true);
+      return;
+    }
+    const existing = document.getElementById("google-identity-script");
+    if (existing) {
+      existing.addEventListener("load", () => setGoogleReady(true));
+      return;
+    }
+    const script = document.createElement("script");
+    script.id = "google-identity-script";
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.defer = true;
+    script.onload = () => setGoogleReady(true);
+    document.head.appendChild(script);
+  }, []);
+
+  const handleGoogleCredential = async (response) => {
+    setError(""); setBusy(true);
+    try {
+      const acct = await verifyGoogleLogin(response.credential);
+      onLogin(acct);
+    } catch (e) {
+      setError(e.message || "Google sign-in failed. Please try again.");
+      setBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!googleReady || mode !== "employee" || !googleBtnRef.current) return;
+    window.google.accounts.id.initialize({
+      client_id: GOOGLE_CLIENT_ID,
+      callback: handleGoogleCredential,
+      hd: COMPANY_EMAIL_DOMAIN, // hints Google to show only @rankviz.com accounts; server still re-checks this
+    });
+    googleBtnRef.current.innerHTML = "";
+    window.google.accounts.id.renderButton(googleBtnRef.current, {
+      theme: "outline", size: "large", width: 336, text: "signin_with", shape: "pill",
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [googleReady, mode]);
+  /* ---- End Google Sign-In ---- */
+
   /* ---- Auth logic below is unchanged from the previous Login.jsx ---- */
   const doLogin = async () => {
     setError(""); setBusy(true);
@@ -157,33 +212,49 @@ export default function Login({ onLogin }) {
             <p>
               {mode === "admin"
                 ? "Sign in to manage attendance, employees and reports."
-                : "Sign in with the username your HR team set up for you."}
+                : `Sign in with your @${COMPANY_EMAIL_DOMAIN} Google account — this is now the only way to sign in as an employee, so nobody can check in or apply leave on your behalf.`}
             </p>
           </div>
 
-          <div className="llg-field" style={{ marginTop: 22 }}>
-            <label>{mode === "employee" ? "Username" : "Username or email"}</label>
-            <div className="llg-input-wrap">
-              <input value={form.username} onChange={set("username")}
-                placeholder={mode === "employee" ? "e.g. rahul.nair" : "e.g. hr@rankviz.com"} />
-            </div>
-          </div>
-          <div className="llg-field">
-            <label>Password</label>
-            <div className="llg-input-wrap">
-              <input type="password" value={form.password} onChange={set("password")}
-                placeholder="••••••••" onKeyDown={e => e.key === "Enter" && submit()} />
-            </div>
-          </div>
+          {mode === "admin" ? (
+            <>
+              <div className="llg-field" style={{ marginTop: 22 }}>
+                <label>Username or email</label>
+                <div className="llg-input-wrap">
+                  <input value={form.username} onChange={set("username")} placeholder="e.g. hr@rankviz.com" />
+                </div>
+              </div>
+              <div className="llg-field">
+                <label>Password</label>
+                <div className="llg-input-wrap">
+                  <input type="password" value={form.password} onChange={set("password")}
+                    placeholder="••••••••" onKeyDown={e => e.key === "Enter" && submit()} />
+                </div>
+              </div>
 
-          {error && (
-            <div className="llg-error"><AlertCircle size={15} /> {error}</div>
+              {error && (
+                <div className="llg-error"><AlertCircle size={15} /> {error}</div>
+              )}
+
+              <button type="button" onClick={submit} disabled={busy} className="llg-login-btn" style={{ opacity: busy ? 0.75 : 1 }}>
+                {busy ? <Loader2 size={16} className="rv-spin" /> : <LogIn size={16} />}
+                {busy ? "Please wait…" : "Log in"}
+              </button>
+            </>
+          ) : (
+            <div style={{ marginTop: 26, display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
+              {busy ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 0", color: "#3C5478", fontWeight: 600, fontSize: 14 }}>
+                  <Loader2 size={16} className="rv-spin" /> Signing you in…
+                </div>
+              ) : (
+                <div ref={googleBtnRef} style={{ minHeight: 44 }} />
+              )}
+              {error && (
+                <div className="llg-error" style={{ width: "100%" }}><AlertCircle size={15} /> {error}</div>
+              )}
+            </div>
           )}
-
-          <button type="button" onClick={submit} disabled={busy} className="llg-login-btn" style={{ opacity: busy ? 0.75 : 1 }}>
-            {busy ? <Loader2 size={16} className="rv-spin" /> : <LogIn size={16} />}
-            {busy ? "Please wait…" : "Log in"}
-          </button>
         </div>
 
         <div className="llg-footer">© {new Date().getFullYear()} <b>RankViz</b> · hr@rankviz.com</div>

@@ -14,6 +14,10 @@ function empToRow(e) {
     grace_minutes: (e.graceMinutes !== undefined && e.graceMinutes !== null && e.graceMinutes !== "")
       ? Number(e.graceMinutes) : null,
     zk_user_id: e.zkUserId || null, active: e.active !== false,
+    // Their @rankviz.com Google Workspace email — this is what "Sign in
+    // with Google" matches against to identify which employee is logging
+    // in, so an employee can only ever punch in/apply leave as themselves.
+    email: e.email ? e.email.trim().toLowerCase() : null,
   };
 }
 function rowToEmp(r) {
@@ -22,6 +26,7 @@ function rowToEmp(r) {
     employmentType: r.employment_type, shiftStart: r.shift_start, shiftEnd: r.shift_end,
     graceMinutes: r.grace_minutes != null ? r.grace_minutes : "",
     zkUserId: r.zk_user_id || "", active: r.active !== false,
+    email: r.email || "",
   };
 }
 
