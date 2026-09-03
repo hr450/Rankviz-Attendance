@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Plus, Edit2, Trash2, Check, X, KeyRound, UserX, UserCheck } from "lucide-react";
-import { COLORS, DEPARTMENTS } from "../lib/constants";
+import { COLORS, DEPARTMENTS, COMPANY_EMAIL_DOMAIN } from "../lib/constants";
 import { uid } from "../lib/utils";
 import { upsertEmployeeCredentials } from "../lib/db";
 import { IconBtn, Field, inputStyle, primaryBtn, secondaryBtn, th, td } from "../components/ui";
@@ -92,6 +92,11 @@ export default function EmployeesView({ employees, setEmployees, accounts, refre
     return true;
   });
 
+  // How many active employees still can't sign in because HR hasn't set
+  // their work email yet — worth surfacing, since Google sign-in is now
+  // the only way in for employees.
+  const missingEmail = employees.filter(e => e.active !== false && !e.email).length;
+
   return (
     <div className="rv-anim-fadein">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, gap: 10, flexWrap: "wrap" }}>
@@ -104,12 +109,22 @@ export default function EmployeesView({ employees, setEmployees, accounts, refre
         alternate day moves someone to Inactive; any of those resuming moves them back to Active.
       </p>
 
+      {missingEmail > 0 && (
+        <div style={{
+          background: "#FFF6E5", border: `1px solid ${COLORS.amber}33`, color: COLORS.ink,
+          borderRadius: 10, padding: "10px 14px", fontSize: 12.5, marginBottom: 14, fontWeight: 600,
+        }}>
+          {missingEmail} active {missingEmail === 1 ? "employee has" : "employees have"} no work email set —
+          they can't sign in until you add their @{COMPANY_EMAIL_DOMAIN} address (Edit → Work email).
+        </div>
+      )}
+
       <div className="rv-card" style={{ padding: "16px 20px", overflowX: "auto" }}>
-        <table className="rv-table-hover" style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
+        <table className="rv-table-hover" style={{ width: "100%", borderCollapse: "collapse", minWidth: 820 }}>
           <thead>
             <tr style={{ color: COLORS.muted, fontSize: 12.5, textAlign: "left" }}>
               <th style={th}>Name</th><th style={th}>Department</th><th style={th}>Type</th>
-              <th style={th}>Shift</th><th style={th}>Status</th><th style={th}>Login</th><th style={th}></th>
+              <th style={th}>Shift</th><th style={th}>Status</th><th style={th}>Work email</th><th style={th}>Login</th><th style={th}></th>
             </tr>
           </thead>
           <tbody>
@@ -136,6 +151,13 @@ export default function EmployeesView({ employees, setEmployees, accounts, refre
                     </span>
                   </td>
                   <td style={td}>
+                    {emp.email ? (
+                      <span style={{ fontSize: 12.5, color: COLORS.ink }}>{emp.email}</span>
+                    ) : (
+                      <span style={{ fontSize: 12.5, fontWeight: 700, color: COLORS.amber }}>Not set</span>
+                    )}
+                  </td>
+                  <td style={td}>
                     {acct ? (
                       <span style={{ fontSize: 12.5, fontWeight: 700, color: COLORS.green }}>{acct.username}</span>
                     ) : (
@@ -158,7 +180,7 @@ export default function EmployeesView({ employees, setEmployees, accounts, refre
               );
             })}
             {visibleEmployees.length === 0 && (
-              <tr><td colSpan={7} style={{ ...td, color: COLORS.muted, textAlign: "center", padding: "26px 0" }}>
+              <tr><td colSpan={8} style={{ ...td, color: COLORS.muted, textAlign: "center", padding: "26px 0" }}>
                 {filter === "inactive" ? "No inactive employees." : filter === "active" ? "No active employees." : "No employees yet."}
               </td></tr>
             )}
@@ -166,7 +188,7 @@ export default function EmployeesView({ employees, setEmployees, accounts, refre
         </table>
       </div>
 
-      {isOpen && <EmployeeModal initial={editing} onClose={() => setEditing(null)} onSave={save} />}
+      {isOpen && <EmployeeModal initial={editing} employees={employees} onClose={() => setEditing(null)} onSave={save} />}
       {credsFor && (
         <CredentialsModal
           employee={credsFor}
@@ -179,19 +201,59 @@ export default function EmployeesView({ employees, setEmployees, accounts, refre
   );
 }
 
-function EmployeeModal({ initial, onClose, onSave }) {
+function EmployeeModal({ initial, employees, onClose, onSave }) {
   const [form, setForm] = useState({
     id: initial.id, name: initial.name || "", department: initial.department || DEPARTMENTS[0],
     employmentType: initial.employmentType || "Full-time",
     shiftStart: initial.shiftStart || "09:30", shiftEnd: initial.shiftEnd || "18:30",
     graceMinutes: initial.graceMinutes !== undefined && initial.graceMinutes !== null ? String(initial.graceMinutes) : "",
     zkUserId: initial.zkUserId || "",
+    // Their Google Workspace address. This is what "Sign in with Google"
+    // matches on, so it MUST be carried through the form — leaving it out
+    // would blank the column on every save and lock the person out.
+    email: initial.email || "",
   });
+  const [emailError, setEmailError] = useState("");
+
+  // Trim + lowercase before it ever reaches the database: a stray space
+  // pasted from a spreadsheet makes the sign-in lookup miss, and that
+  // failure is invisible until the employee tries to log in.
+  const cleanEmail = form.email.trim().toLowerCase();
+
+  const validateEmail = () => {
+    if (!cleanEmail) return ""; // optional — HR can fill it in later
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) return "That doesn't look like a valid email address.";
+    if (!cleanEmail.endsWith("@" + COMPANY_EMAIL_DOMAIN)) return `Must be an @${COMPANY_EMAIL_DOMAIN} address.`;
+    const clash = (employees || []).find(e => e.id !== form.id && (e.email || "").toLowerCase() === cleanEmail);
+    if (clash) return `Already used by ${clash.name}.`;
+    return "";
+  };
+
+  const submit = () => {
+    const err = validateEmail();
+    if (err) { setEmailError(err); return; }
+    if (!form.name.trim()) return;
+    onSave({ ...form, email: cleanEmail });
+  };
 
   return (
     <Modal title={initial.id ? "Edit employee" : "Add employee"} onClose={onClose}>
       <Field label="Full name">
         <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} style={inputStyle} placeholder="e.g. Ananya Rao" />
+      </Field>
+      <Field
+        label="Work email (Google sign-in)"
+        hint={`Their @${COMPANY_EMAIL_DOMAIN} Google account. Employees sign in with this — without it they can't log in at all.`}
+      >
+        <input
+          type="email"
+          value={form.email}
+          onChange={e => { setForm({ ...form, email: e.target.value }); if (emailError) setEmailError(""); }}
+          onBlur={() => setEmailError(validateEmail())}
+          style={{ ...inputStyle, borderColor: emailError ? COLORS.red : undefined }}
+          placeholder={`e.g. ananya@${COMPANY_EMAIL_DOMAIN}`}
+        />
+        {emailError && <div style={{ color: COLORS.red, fontSize: 12, fontWeight: 600, marginTop: 6 }}>{emailError}</div>}
       </Field>
       <Field label="Department">
         <select value={form.department} onChange={e => setForm({ ...form, department: e.target.value })} style={inputStyle}>
@@ -225,7 +287,7 @@ function EmployeeModal({ initial, onClose, onSave }) {
       </Field>
       <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
         <button onClick={onClose} style={secondaryBtn}>Cancel</button>
-        <button onClick={() => form.name.trim() && onSave(form)} style={{ ...primaryBtn, flex: 1, justifyContent: "center" }} disabled={!form.name.trim()}>
+        <button onClick={submit} style={{ ...primaryBtn, flex: 1, justifyContent: "center" }} disabled={!form.name.trim()}>
           <Check size={16} /> Save
         </button>
       </div>
