@@ -223,14 +223,17 @@ export async function loadLeaveRequests() {
   const rows = await supaFetch("leave_requests?select=*&order=created_at.desc");
   return (rows || []).map(rowToLeaveRequest);
 }
+// Goes through /api/leave-requests instead of writing to Supabase directly.
+// employeeId is still passed for the HR case (applying on someone's
+// behalf), but the server IGNORES it for employee logins and uses the id
+// from their session token — so nobody can file leave in a colleague's
+// name by editing what the browser sends.
 export async function createLeaveRequest({ employeeId, leaveTypeId, leaveTypeName, startDate, endDate, reason }) {
-  const row = {
-    id: uid("lv"), employee_id: employeeId, leave_type_id: leaveTypeId || null,
-    leave_type_name: leaveTypeName, start_date: startDate, end_date: endDate,
-    reason: reason || null, status: "pending",
-  };
-  await supaFetch("leave_requests", { method: "POST", body: JSON.stringify([row]) });
-  return rowToLeaveRequest(row);
+  const data = await apiFetch("/api/leave-requests", {
+    method: "POST",
+    body: JSON.stringify({ employeeId, leaveTypeId, leaveTypeName, startDate, endDate, reason }),
+  });
+  return rowToLeaveRequest(data.request);
 }
 export async function decideLeaveRequest(id, status, decidedBy) {
   await supaFetch(`leave_requests?id=eq.${encodeURIComponent(id)}`, {
