@@ -117,11 +117,10 @@ const SUMMARY_ROWS = [
   { key: "extraDay", label: "Extra day" },
 ];
 
-function AttendanceSummaryPanel({ employee, attendance, now }) {
+function AttendanceSummaryPanel({ employee, attendance, now, period, onPeriodChange }) {
   const todayFull = todayStr(now);
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
   const currentYm = monthKey(todayFull);
-  const [period, setPeriod] = useState(currentYm); // "YYYY-MM", or "annual"
   const monthOpts = useMemo(() => recentMonthOptions(now, 12), [now]);
 
   const summary = useMemo(() => {
@@ -145,7 +144,7 @@ function AttendanceSummaryPanel({ employee, attendance, now }) {
       <div style={{ marginBottom: 14 }}>
         <CustomSelect
           value={period}
-          onChange={setPeriod}
+          onChange={onPeriodChange}
           options={[
             ...monthOpts.map(o => ({ value: o.value, label: o.label })),
             { value: "annual", label: `Annual (${now.getFullYear()})` },
@@ -457,6 +456,10 @@ export default function EmployeeDashboard({ employee, attendance, punch, now, on
   const [profileOverride, setProfileOverride] = useState(null); // { name, department, avatar } — optimistic local edit
   const [tab, setTab] = useState("attendance"); // 'attendance' | 'leaves'
   const [punchError, setPunchError] = useState(null);
+  // Shared between "My summary" and the daily records list below it, so
+  // picking a month in one updates the other instead of the list always
+  // being stuck on the current month.
+  const [summaryPeriod, setSummaryPeriod] = useState(() => monthKey(todayStr(now)));
 
   // Dark mode is a per-browser display preference, not employee data — kept
   // in localStorage (not the backend) and remembered across visits.
@@ -543,7 +546,7 @@ export default function EmployeeDashboard({ employee, attendance, punch, now, on
             {tab === "attendance" && (
               <div style={{ display: "flex", gap: 20, alignItems: "flex-start", flexWrap: "wrap" }}>
                 <div style={{ width: 240, flexShrink: 0 }}>
-                  <AttendanceSummaryPanel employee={employee} attendance={attendance} now={now} />
+                  <AttendanceSummaryPanel employee={employee} attendance={attendance} now={now} period={summaryPeriod} onPeriodChange={setSummaryPeriod} />
                 </div>
                 <div style={{ flex: 1, minWidth: 280 }}>
                 <div key={date} className="rv-card rv-dark-card rv-anim-slideupin rv-stagger rv-stagger-2" style={{ padding: 24, marginBottom: 22, borderRadius: 16 }}>
@@ -577,7 +580,7 @@ export default function EmployeeDashboard({ employee, attendance, punch, now, on
                 </div>
                 <PunchErrorBanner message={punchError} />
 
-                <RecentActivity employee={employee} attendance={attendance} now={now} />
+                <RecentActivity employee={employee} attendance={attendance} now={now} period={summaryPeriod} />
                 </div>
               </div>
             )}
@@ -682,24 +685,38 @@ function PunchErrorBanner({ message }) {
   );
 }
 
-function RecentActivity({ employee, attendance, now }) {
+function RecentActivity({ employee, attendance, now, period }) {
   const listRef = useRef(null);
 
-  // Always land at the top (today) — without this, the browser can keep an
-  // old scroll position across re-renders/mounts and land you mid-list.
+  // Always land at the top (most recent) — without this, the browser can
+  // keep an old scroll position across re-renders/mounts and land you
+  // mid-list, and it's especially jarring right after switching months.
   useEffect(() => {
     if (listRef.current) listRef.current.scrollTop = 0;
-  }, []);
+  }, [period]);
 
-  // Every day from the 1st of the current month through today, most recent
-  // first. Recomputed on every render from `now`/`attendance`, so a punch
-  // made moments ago (today's row, or one just corrected by HR) shows up
-  // immediately without any extra plumbing.
-  const dayOfMonth = now.getDate();
-  const allDays = [...Array(dayOfMonth)].map((_, i) => {
-    const d = new Date(now); d.setDate(d.getDate() - i);
-    return todayStr(d);
-  });
+  const todayFull = todayStr(now);
+  const currentYm = monthKey(todayFull);
+
+  // "annual" would mean generating 250+ rows, which isn't a useful list to
+  // scan — point people at a specific month instead of rendering it.
+  const isAnnual = period === "annual" || !period;
+
+  // Every day in the selected month (only up through today, if it's the
+  // current month), most recent first. Recomputed on every render from
+  // `now`/`attendance`/`period`, so a punch made moments ago, or a record
+  // HR just corrected, shows up immediately without any extra plumbing.
+  const allDays = useMemo(() => {
+    if (isAnnual) return [];
+    const total = daysInMonth(period);
+    const lastDay = period === currentYm ? now.getDate() : total;
+    const days = [];
+    for (let d = lastDay; d >= 1; d--) {
+      days.push(`${period}-${String(d).padStart(2, "0")}`);
+    }
+    return days;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [period, currentYm, now.getDate()]);
 
   const DOT_COLOR = {
     present: "#2F9E6E", late: "#D99A2B", wfh: "#2F6FED",
@@ -743,17 +760,28 @@ function RecentActivity({ employee, attendance, now }) {
     );
   };
 
+  const monthLabel = !isAnnual
+    ? new Date(period + "-01T00:00:00").toLocaleDateString([], { month: "long", year: "numeric" })
+    : null;
+  const heading = isAnnual ? "Recent activity" : (period === currentYm ? "Recent activity" : monthLabel);
+
   return (
     <div className="rv-stagger rv-stagger-4" style={{ marginTop: 26 }}>
-      <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 10, color: "var(--rv-ink)" }}>Recent activity</div>
+      <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 10, color: "var(--rv-ink)" }}>{heading}</div>
       <div className="rv-card rv-dark-card" style={{ padding: "6px 4px", borderRadius: 16 }}>
-        <div
-          ref={listRef}
-          className="rv-expand-panel"
-          style={{ maxHeight: 300, overflowY: "auto", overflowX: "hidden", overflowAnchor: "none" }}
-        >
-          {allDays.map(renderRow)}
-        </div>
+        {isAnnual ? (
+          <div style={{ padding: "24px 16px", textAlign: "center", fontSize: 13, color: "var(--rv-muted)", fontWeight: 600 }}>
+            Pick a specific month above to see day-by-day records.
+          </div>
+        ) : (
+          <div
+            ref={listRef}
+            className="rv-expand-panel"
+            style={{ maxHeight: 300, overflowY: "auto", overflowX: "hidden", overflowAnchor: "none" }}
+          >
+            {allDays.map(renderRow)}
+          </div>
+        )}
       </div>
     </div>
   );
