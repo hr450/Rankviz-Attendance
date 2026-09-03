@@ -142,10 +142,16 @@ function AttendanceSummaryPanel({ employee, attendance, now }) {
   return (
     <div className="rv-card rv-dark-card rv-stagger rv-stagger-2" style={{ padding: 18, borderRadius: 16 }}>
       <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 10, color: "var(--rv-ink)" }}>My summary</div>
-      <select value={period} onChange={e => setPeriod(e.target.value)} style={{ ...inputStyle, marginBottom: 14, fontSize: 12.5, padding: "7px 9px" }}>
-        {monthOpts.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-        <option value="annual">Annual ({now.getFullYear()})</option>
-      </select>
+      <div style={{ marginBottom: 14 }}>
+        <CustomSelect
+          value={period}
+          onChange={setPeriod}
+          options={[
+            ...monthOpts.map(o => ({ value: o.value, label: o.label })),
+            { value: "annual", label: `Annual (${now.getFullYear()})` },
+          ]}
+        />
+      </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {SUMMARY_ROWS.map(r => (
           <div key={r.key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12.5, padding: "3px 0", borderBottom: "1px solid var(--rv-line)" }}>
