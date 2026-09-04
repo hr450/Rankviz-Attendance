@@ -46,6 +46,14 @@ function dayHoursFor(rec) {
 // agree with what HR sees for the same records.
 function leaveCodeFor(rec) {
   if (!rec) return null;
+
+  // The status set on the record wins over anything written in Notes. Imported
+  // days carry their kind in manualStatus, and the Notes cell often says
+  // something else entirely (a short-leave day whose note reads "WFH"), so
+  // reading Notes alone left those days out of the totals even though the day
+  // list showed them correctly.
+  if (rec.manualStatus === "short_leave") return "ShortLeave";
+
   const reason = (rec.leaveReason || "").toLowerCase();
   if (reason.includes("casual")) return "CL";
   if (reason.includes("sick")) return "SL";
@@ -88,7 +96,9 @@ function tallyEmployeeMonth(employee, attendance, monthYm, todayFull, nowMinutes
     else if (code === "SL") t.sl++;
     else if (code === "AL") t.al++;
     else if (code === "ShortLeave") t.shortLeave++;
-    if (rec?.alternateDay) {
+    // An imported extra day arrives as a status rather than the alternateDay
+    // flag, so count both or those days never reach the totals.
+    if (rec?.alternateDay || rec?.manualStatus === "extra_day") {
       t.alternate++;
       const dow = new Date(dateStr + "T00:00:00").getDay(); // 0 = Sun, 6 = Sat
       if (dow === 0 || dow === 6) t.extraDay++;

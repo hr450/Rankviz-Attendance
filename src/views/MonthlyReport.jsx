@@ -37,6 +37,14 @@ function statusSelectStyle(value) {
 // this feature still get counted correctly without needing to be re-saved.
 function leaveCodeFor(rec) {
   if (!rec) return null;
+
+  // The status set on the record wins over anything written in Notes. Imported
+  // days carry their kind in manualStatus, and the Notes cell often says
+  // something else entirely (a short-leave day whose note reads "WFH"), so
+  // reading Notes alone left those days out of the totals even though the day
+  // list showed them correctly.
+  if (rec.manualStatus === "short_leave") return "ShortLeave";
+
   const reason = (rec.leaveReason || "").toLowerCase();
   if (reason.includes("casual")) return "CL";
   if (reason.includes("sick")) return "SL";
@@ -139,7 +147,7 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
   }, [emp, ym, attendance, totalDays, todayFull, nowMinutes]);
 
   const leaves = rows.filter(r => r.status.tone === "leave");
-  const alternates = rows.filter(r => r.rec?.alternateDay);
+  const alternates = rows.filter(r => r.rec?.alternateDay || r.rec?.manualStatus === "extra_day");
   // A row belongs to whichever side is actually missing a punch — never
   // both lists at once. The auto-flagged case (see isFlaggedNotARealCheckIn)
   // is a missing check-in wearing a checkIn-field disguise, so it's routed
