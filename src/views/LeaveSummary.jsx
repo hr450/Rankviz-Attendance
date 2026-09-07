@@ -23,6 +23,11 @@ const CODE_TO_LABEL = {
 // Notes-parser), fall back to scanning the Notes text directly for older
 // records that were never re-saved.
 function leaveCodeFor(rec) {
+  // A day marked Short Leave through the Status-Edit dropdown carries it in
+  // manualStatus and often says something unrelated in Notes ("WFH", "no check
+  // out"), so reading only leaveReason/Notes left those days out of the counts
+  // entirely — the row showed "—" while the Monthly Report showed the day.
+  if (rec?.manualStatus === "short_leave") return "Short Leave";
   const reason = (rec?.leaveReason || "").toLowerCase();
   const notes = (rec?.notes || "").toLowerCase();
   if (reason.includes("casual") || /\bcl\b/.test(notes)) return "CL";
@@ -45,6 +50,24 @@ function expandDateRange(startDate, endDate) {
     d.setDate(d.getDate() + 1);
   }
   return dates;
+}
+
+// Leave actually used, in days — the same weighting the yearly leave sheet
+// applies, so the two records can be compared without converting anything:
+// a full day counts 1, a half day 0.5, a short leave 0.25.
+// WFH and No Checkout are deliberately left out: working from home is work,
+// and a missing checkout is a data problem, not time off.
+const HALF_DAY_WEIGHT = 0.5;
+const SHORT_LEAVE_WEIGHT = 0.25;
+
+function leaveDaysFor(row) {
+  const full = row.byType["Sick Leave"].length
+             + row.byType["Casual Leave"].length
+             + row.byType["Annual Leave"].length;
+  const days = full
+             + row.byType["Short Leave"].length * SHORT_LEAVE_WEIGHT
+             + row.halfDays.length * HALF_DAY_WEIGHT;
+  return Math.round(days * 100) / 100;
 }
 
 function fmtDate(d) {
@@ -88,7 +111,13 @@ export default function LeaveSummaryView({ employees, attendance, leaveRequests,
 
         // Half Day: catch both the manual override and the auto-computed tone.
         if (rec?.manualStatus === "half" || status?.tone === "half") halfDays.push({ date });
-        if (status?.tone === "no_checkout") noCheckoutDays.push({ date });
+        // Checking the tone alone was not enough: the moment HR sets a status
+        // from the dropdown, computeStatus returns that status instead of
+        // no_checkout, so an edited day silently dropped out of this count.
+        // Read the timestamps directly as well.
+        const missedOffice = !!rec?.checkIn && !rec?.checkOut;
+        const missedWfh = !!rec?.wfhCheckIn && !rec?.wfhCheckOut;
+        if (status?.tone === "no_checkout" || missedOffice || missedWfh) noCheckoutDays.push({ date });
         if (status?.tone === "wfh") wfhDays.push({ date });
 
         // CL/SL/AL/Short Leave detected from this attendance record (manual
@@ -149,13 +178,13 @@ export default function LeaveSummaryView({ employees, attendance, leaveRequests,
               <th style={th}>Half Day</th>
               <th style={th}>No Checkout</th>
               <th style={th}>WFH</th>
-              <th style={th}>Total</th>
+              <th style={th}>Leave used (days)</th>
               <th style={th}></th>
             </tr>
           </thead>
           <tbody>
             {summaries.map((row, i) => {
-              const total = LEAVE_TYPE_LABELS.reduce((s, t) => s + row.byType[t].length, 0) + row.halfDays.length + row.noCheckoutDays.length + row.wfhDays.length;
+              const total = leaveDaysFor(row);
               const isOpen = expanded === row.emp.id;
               return (
                 <React.Fragment key={row.emp.id}>
@@ -195,6 +224,11 @@ export default function LeaveSummaryView({ employees, attendance, leaveRequests,
         by a formal request. Half Day, No Checkout, and WFH are calculated automatically from daily check-in/check-out
         records and manual overrides — No Checkout means an employee checked in but never checked out, and is tracked
         separately from Half Day. Click a row to see full dates and reasons.
+        <br /><br />
+        <strong>Leave used (days)</strong> weights each kind the way the yearly leave sheet does: a full Sick, Casual or
+        Annual day counts 1, a half day 0.5, and a short leave 0.25. WFH and No Checkout are excluded — working from
+        home is work, and a missing checkout is a record to fix, not time off. The other columns stay as plain counts of
+        days, so a row's numbers will not add up to this figure.
       </p>
     </div>
   );
