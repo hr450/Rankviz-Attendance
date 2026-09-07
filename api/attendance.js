@@ -1,6 +1,4 @@
-// GET  /api/attendance?from=YYYY-MM-DD&to=YYYY-MM-DD       — load attendance for a date range
-//      (both optional; leaving them off still returns every date)
-//      An admin gets all employees; an employee gets only their own rows.
+// GET  /api/attendance                                     — load all attendance (logged-in users)
 // POST /api/attendance  { employeeId, date, rec, source }   — save a record (admin only)
 // Header: Authorization: Bearer <token from /api/auth/login>
 //
@@ -10,29 +8,64 @@
 import { supaAdminFetch, } from "../src/lib/supabaseAdmin.js";
 import { requireRole } from "../src/lib/authToken.js";
 
-// PostgREST caps a single request at ~1000 rows — page through with Range headers.
+// PostgREST caps a single request at ~1000 rows, so a year of attendance takes
+// about fourteen of them. Fetching those one after another meant the login wait
+// was the SUM of fourteen round trips — roughly a minute on a slow connection,
+// staring at a blank screen.
+//
+// So: ask for the row count first (Range 0-0 with count=exact returns it in the
+// Content-Range header without sending any data), then request every page at
+// once. The wait becomes one round trip plus the slowest page, instead of
+// fourteen in single file.
 async function supaAdminFetchAll(path, pageSize = 1000) {
-  let all = [];
-  let from = 0;
   const SUPABASE_URL = process.env.SUPABASE_URL;
   const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  while (true) {
-    const to = from + pageSize - 1;
+  const headers = (range) => ({
+    apikey: SERVICE_ROLE_KEY,
+    Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+    "Content-Type": "application/json",
+    Range: range,
+  });
+
+  const fetchPage = async (from) => {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-      headers: {
-        apikey: SERVICE_ROLE_KEY,
-        Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
-        "Content-Type": "application/json",
-        Range: `${from}-${to}`,
-      },
+      headers: headers(`${from}-${from + pageSize - 1}`),
     });
     if (!res.ok) throw new Error(`Supabase ${path} failed: ${res.status}`);
-    const page = await res.json().catch(() => []);
-    all = all.concat(page || []);
-    if (!page || page.length < pageSize) break;
-    from += pageSize;
+    return (await res.json().catch(() => [])) || [];
+  };
+
+  // Head request: no rows, just the total.
+  let total = null;
+  try {
+    const head = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+      headers: { ...headers("0-0"), Prefer: "count=exact" },
+    });
+    const cr = head.headers.get("content-range"); // e.g. "0-0/13612"
+    const parsed = cr && Number(cr.split("/")[1]);
+    if (Number.isFinite(parsed)) total = parsed;
+  } catch {
+    // Count is an optimisation, not a requirement — fall through to paging.
   }
-  return all;
+
+  if (total === null) {
+    // Couldn't get a count: walk the pages the old way rather than guess.
+    let all = [], from = 0;
+    while (true) {
+      const page = await fetchPage(from);
+      all = all.concat(page);
+      if (page.length < pageSize) break;
+      from += pageSize;
+    }
+    return all;
+  }
+
+  if (total === 0) return [];
+
+  const starts = [];
+  for (let from = 0; from < total; from += pageSize) starts.push(from);
+  const pages = await Promise.all(starts.map(fetchPage));
+  return pages.flat();
 }
 
 export default async function handler(req, res) {
@@ -46,28 +79,16 @@ export default async function handler(req, res) {
 
   if (req.method === "GET") {
     try {
-      // A date range keeps this from growing without limit. Attendance adds
-      // roughly 1,700 rows a month, so "everything" is a number that only
-      // ever goes up, and every byte of it lands in the browser on login.
-      // Filtering server-side means a year from now costs the same as today.
-      const { from, to } = req.query || {};
-      const isDate = (v) => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
-      let path = "attendance?select=*";
-      if (isDate(from)) path += `&date=gte.${from}`;
-      if (isDate(to)) path += `&date=lte.${to}`;
-
       // An employee only ever needs their own days. This route used to hand
       // the whole company's attendance to anyone with a login — every
       // colleague's check-in and check-out times, which is not theirs to
       // read — and it made each employee login pull thousands of rows it
-      // would then throw away. Sixty people signing in at nine in the
-      // morning turned that into a burst of hundreds of requests.
-      // HR still gets everyone, because that is the job.
+      // would then throw away. HR still gets everyone, because that is the job.
+      let path = "attendance?select=*";
       if (caller.role !== "admin") {
         if (!caller.employeeId) return res.status(200).json({});
         path += `&employee_id=eq.${encodeURIComponent(caller.employeeId)}`;
       }
-
       const rows = await supaAdminFetchAll(path);
       const map = {};
       (rows || []).forEach(r => {
