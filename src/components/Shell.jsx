@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { Building2, Users, BarChart3, FileText, X, Menu, LogOut, CalendarCheck, CalendarDays, Wallet, CalendarHeart, PieChart } from "lucide-react";
 import { COLORS } from "../lib/constants";
-import { LogoMark, selectStyle } from "./ui";
+import { LogoMark } from "./ui";
+import Dropdown from "./Dropdown";
 
 const NAV_ITEMS = [
   { id: "today", label: "Today", icon: Building2 },
@@ -103,18 +104,21 @@ function TopBar({ saveState, account, employeeFilter, setEmployeeFilter }) {
   return (
     <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", marginBottom: 22, flexWrap: "wrap", gap: 14 }}>
       {setEmployeeFilter && (
-        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: COLORS.muted, fontWeight: 600 }}>
-          Employees
-          <select
+        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: COLORS.muted, fontWeight: 600 }}>
+          <span>Employees</span>
+          <Dropdown
             value={employeeFilter}
-            onChange={e => setEmployeeFilter(e.target.value)}
-            style={{ ...selectStyle, width: "auto", padding: "6px 10px", fontSize: 12.5 }}
-          >
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-            <option value="all">All</option>
-          </select>
-        </label>
+            onChange={setEmployeeFilter}
+            options={[
+              { value: "active", label: "Active" },
+              { value: "inactive", label: "Inactive" },
+              { value: "all", label: "All" },
+            ]}
+            minWidth={124}
+            align="right"
+            ariaLabel="Employees"
+          />
+        </div>
       )}
       {showStatus && (
         <span className="rv-savestate" style={{ fontSize: 12.5, color: saveState === "saving" ? COLORS.muted : COLORS.green, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 6 }}>
