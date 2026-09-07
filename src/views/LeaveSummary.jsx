@@ -88,6 +88,23 @@ export default function LeaveSummaryView({ employees, attendance, leaveRequests,
   const today = todayStr(now);
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
 
+  // Attendance arrives as one flat object keyed "employeeId|date", and the
+  // per-employee loop below used to scan the whole of it once for every
+  // employee — 60 people against 13,000 records is 800,000 passes on each
+  // render, and it grows with every month of history. Grouping once, up
+  // front, turns that into a single pass: each employee then reads only
+  // their own rows.
+  const attendanceByEmployee = useMemo(() => {
+    const byEmp = {};
+    for (const key in (attendance || {})) {
+      const sep = key.indexOf("|");
+      if (sep === -1) continue;
+      const empId = key.slice(0, sep);
+      (byEmp[empId] ||= []).push([key.slice(sep + 1), attendance[key]]);
+    }
+    return byEmp;
+  }, [attendance]);
+
   const summaries = useMemo(() => {
     return employees.map(emp => {
       const empApproved = approved.filter(r => r.employeeId === emp.id);
@@ -110,9 +127,7 @@ export default function LeaveSummaryView({ employees, attendance, leaveRequests,
       const halfDays = [];
       const noCheckoutDays = [];
       const wfhDays = [];
-      Object.entries(attendance || {}).forEach(([key, rec]) => {
-        if (!key.startsWith(`${emp.id}|`)) return;
-        const date = key.split("|")[1];
+      (attendanceByEmployee[emp.id] || []).forEach(([date, rec]) => {
         if (date > today) return;
         const status = computeStatus(emp, rec, date < today, nowMinutes, date);
 
@@ -153,7 +168,7 @@ export default function LeaveSummaryView({ employees, attendance, leaveRequests,
 
       return { emp, byType, halfDays, noCheckoutDays, wfhDays };
     });
-  }, [employees, approved, attendance, today, nowMinutes]);
+  }, [employees, approved, attendanceByEmployee, today, nowMinutes]);
 
   const totals = LEAVE_TYPE_LABELS.reduce((acc, t) => {
     acc[t] = summaries.reduce((s, row) => s + row.byType[t].length, 0);

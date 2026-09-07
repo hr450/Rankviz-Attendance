@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, ChevronDown, Coffee, Repeat, Home, Pencil, X, CalendarHeart, Download, FileSpreadsheet, Globe } from "lucide-react";
 import { COLORS, MANUAL_STATUS_OPTIONS } from "../lib/constants";
-import { computeStatus, isFlaggedNotARealCheckIn, fmtTime, fmtHrs, monthKey, daysInMonth, todayStr } from "../lib/utils";
-import { StatusPill, StatCard, selectStyle, th, td } from "../components/ui";
+import { computeStatus, isFlaggedNotARealCheckIn, fmtTime, fmtHrs, monthKey, daysInMonth, todayStr, TONE_STYLES } from "../lib/utils";
+import { StatusPill, selectStyle, th, td } from "../components/ui";
 import Dropdown from "../components/Dropdown";
 
 // Nicer look for the Status-Edit dropdown and the employee/month pickers —
@@ -111,7 +111,7 @@ function noteSummaryFor(r, holidayByDate) {
   return parts.join(" | ");
 }
 
-export default function MonthlyReportView({ employees, attendance, now, onSaveEdit, onUpdateShift, session, publicHolidays = [] }) {
+export default function MonthlyReportView({ employees, attendance, now, onSaveEdit, onUpdateShift, session, publicHolidays = [], onNeedYear }) {
   const [empId, setEmpId] = useState(employees[0]?.id || "");
   const [ym, setYm] = useState(monthKey(todayStr(now)));
   const [editingDate, setEditingDate] = useState(null); // date string of the row currently open in the edit modal
@@ -123,6 +123,12 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
     publicHolidays.forEach(h => { map[h.date] = h.name; });
     return map;
   }, [publicHolidays]);
+
+  // Only the current year is fetched at login, so stepping back into an
+  // earlier one has to ask for it before the table can show anything.
+  useEffect(() => {
+    if (onNeedYear && ym) onNeedYear(Number(ym.slice(0, 4)));
+  }, [ym, onNeedYear]);
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuHover, setMenuHover] = useState(null);
@@ -452,23 +458,60 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 14, marginBottom: 22 }}>
-        <StatCard label="Present" value={stats.present} tone="present" />
-        <StatCard label="Late" value={stats.late} tone="half" />
-        <StatCard label="Half day" value={stats.half} tone="half" />
-        <StatCard label="Short Leave" value={stats.shortLeave} tone="half" />
-        <StatCard label="WFH" value={stats.wfh} tone="present" />
-        <StatCard label="Leave" value={stats.leave} tone="leave" />
-        <StatCard label="CL" value={stats.cl} tone="leave" />
-        <StatCard label="SL" value={stats.sl} tone="leave" />
-        <StatCard label="AL" value={stats.al} tone="leave" />
-        <StatCard label="Absent" value={stats.absent} tone="absent" />
-        <StatCard label="Attendance" value={stats.attendancePct != null ? `${stats.attendancePct}%` : "—"} tone="present" />
-        <StatCard label="Avg hrs/day" value={stats.avgHours ? stats.avgHours.toFixed(1) + "h" : "—"} tone="pending" />
-        <StatCard label="Alternate days worked" value={alternates.length} tone="present" />
-        <StatCard label="Missing checkouts" value={noCheckouts.length} tone="half" />
-        <StatCard label="Missing check-ins" value={noCheckins.length} tone="half" />
-        <StatCard label="Days recorded" value={rows.filter(r => r.rec).length} tone="pending" />
+      {/* Sixteen equal boxes, most of them showing zero, made the eye work for
+          nothing — the two figures that actually answer "how was this month"
+          were buried among counts that are usually 0. Three headline numbers
+          lead; the counts sit underneath, grouped by what they mean, in the
+          same label-and-value rows the employee dashboard already uses. */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 14, marginBottom: 14 }}>
+        <HeadlineStat
+          label="Attendance"
+          value={stats.attendancePct != null ? `${stats.attendancePct}%` : "—"}
+          tone="present"
+        />
+        <HeadlineStat
+          label="Average hours a day"
+          value={stats.avgHours ? `${stats.avgHours.toFixed(1)}h` : "—"}
+          tone="wfh"
+        />
+        <HeadlineStat
+          label="Days recorded"
+          value={rows.filter(r => r.rec).length}
+          sub={`of ${rows.length} in the month`}
+          tone="pending"
+        />
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(258px, 1fr))", gap: 14, marginBottom: 22 }}>
+        <StatGroup
+          title="At work"
+          items={[
+            { label: "Present", value: stats.present, tone: "present" },
+            { label: "Late", value: stats.late, tone: "late" },
+            { label: "Work from home", value: stats.wfh, tone: "wfh" },
+            { label: "Alternate days worked", value: alternates.length, tone: "present" },
+          ]}
+        />
+        <StatGroup
+          title="Away"
+          items={[
+            { label: "Leave", value: stats.leave, tone: "leave" },
+            { label: "Casual (CL)", value: stats.cl, tone: "leave" },
+            { label: "Sick (SL)", value: stats.sl, tone: "leave" },
+            { label: "Annual (AL)", value: stats.al, tone: "leave" },
+            { label: "Half day", value: stats.half, tone: "half" },
+            { label: "Short leave", value: stats.shortLeave, tone: "short_leave" },
+            { label: "Absent", value: stats.absent, tone: "absent" },
+          ]}
+        />
+        <StatGroup
+          title="Needs a look"
+          hint="Days where a punch is missing — a record to fix, not time off."
+          items={[
+            { label: "Missing checkouts", value: noCheckouts.length, tone: "no_checkout" },
+            { label: "Missing check-ins", value: noCheckins.length, tone: "no_checkin" },
+          ]}
+        />
       </div>
 
       {leaves.length > 0 && (
@@ -720,6 +763,59 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
 
 // Pre-fills from an ISO timestamp into the local "YYYY-MM-DDTHH:mm" format
 // <input type="datetime-local"> expects. Empty string renders as blank.
+/* One of the three figures that lead the month. Big number, quiet label —
+   the opposite weighting to the grouped counts below it. */
+function HeadlineStat({ label, value, sub, tone = "pending" }) {
+  const t = TONE_STYLES[tone] || TONE_STYLES.pending;
+  return (
+    <div className="rv-card" style={{ padding: "16px 18px", borderRadius: 14 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{ width: 8, height: 8, borderRadius: "50%", background: t.dot, boxShadow: `0 0 0 3px ${t.bg}`, flexShrink: 0 }} />
+        <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.muted }}>{label}</span>
+      </div>
+      <div style={{ fontSize: 30, fontWeight: 800, lineHeight: 1.15, marginTop: 8, color: COLORS.ink }}>{value}</div>
+      {sub && <div style={{ fontSize: 11.5, color: COLORS.muted, marginTop: 2 }}>{sub}</div>}
+    </div>
+  );
+}
+
+/* A set of related counts as rows rather than separate boxes. A zero is
+   greyed rather than hidden: "no absences" is worth reading, but it
+   shouldn't compete with a number that isn't zero. */
+function StatGroup({ title, items, hint }) {
+  return (
+    <div className="rv-card" style={{ padding: "16px 18px", borderRadius: 14 }}>
+      <div style={{ fontSize: 12.5, fontWeight: 800, color: COLORS.ink, marginBottom: 10 }}>{title}</div>
+      <div style={{ display: "flex", flexDirection: "column" }}>
+        {items.map((it, i) => {
+          const t = TONE_STYLES[it.tone] || TONE_STYLES.pending;
+          const zero = !it.value;
+          return (
+            <div
+              key={it.label}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                gap: 10, padding: "6px 0", fontSize: 12.5,
+                borderTop: i === 0 ? "none" : `1px solid ${COLORS.line}`,
+              }}
+            >
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 8, color: COLORS.muted, fontWeight: 600 }}>
+                <span style={{
+                  width: 7, height: 7, borderRadius: "50%", flexShrink: 0,
+                  background: zero ? "#D7DCEA" : t.dot,
+                }} />
+                {it.label}
+              </span>
+              <span style={{ fontWeight: 800, fontSize: 13.5, color: zero ? "#AEB6CC" : COLORS.ink }}>{it.value}</span>
+            </div>
+          );
+        })}
+      </div>
+      {hint && <div style={{ fontSize: 11, color: COLORS.muted, marginTop: 10, lineHeight: 1.45 }}>{hint}</div>}
+    </div>
+  );
+}
+
 function toDatetimeLocal(iso) {
   if (!iso) return "";
   const d = new Date(iso);
