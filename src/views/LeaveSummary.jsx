@@ -70,6 +70,13 @@ function leaveDaysFor(row) {
   return Math.round(days * 100) / 100;
 }
 
+// The column shows a whole number, because a table of 2.75 / 11.75 / 18.75 is
+// hard to scan. The exact quarter-day figure is kept on the cell's tooltip so
+// nothing is lost when someone needs to tie a row back to the leave sheet.
+function leaveDaysLabel(days) {
+  return Math.round(days);
+}
+
 function fmtDate(d) {
   return new Date(d + "T00:00:00").toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
 }
@@ -198,7 +205,7 @@ export default function LeaveSummaryView({ employees, attendance, leaveRequests,
                     <td style={td}>{row.halfDays.length || "—"}</td>
                     <td style={td}>{row.noCheckoutDays.length || "—"}</td>
                     <td style={td}>{row.wfhDays.length || "—"}</td>
-                    <td style={{ ...td, fontWeight: 700 }}>{total}</td>
+                    <td style={{ ...td, fontWeight: 700 }} title={`${total} days exactly`}>{leaveDaysLabel(total)}</td>
                     <td style={td}>{isOpen ? <ChevronUp size={15} color={COLORS.muted} /> : <ChevronDown size={15} color={COLORS.muted} />}</td>
                   </tr>
                   {isOpen && (
@@ -228,7 +235,8 @@ export default function LeaveSummaryView({ employees, attendance, leaveRequests,
         <strong>Leave used (days)</strong> weights each kind the way the yearly leave sheet does: a full Sick, Casual or
         Annual day counts 1, a half day 0.5, and a short leave 0.25. WFH and No Checkout are excluded — working from
         home is work, and a missing checkout is a record to fix, not time off. The other columns stay as plain counts of
-        days, so a row's numbers will not add up to this figure.
+        days, so a row's numbers will not add up to this figure. The number shown is rounded to whole days; hover it to
+        see the exact quarter-day figure that matches the leave sheet.
       </p>
     </div>
   );
