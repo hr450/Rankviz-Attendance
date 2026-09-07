@@ -1,6 +1,5 @@
-import React, { useMemo, useState } from "react";
-import * as XLSX from "xlsx";
-import { ChevronLeft, ChevronRight, Coffee, Repeat, Home, Pencil, X, CalendarHeart, Download } from "lucide-react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight, ChevronDown, Coffee, Repeat, Home, Pencil, X, CalendarHeart, Download, FileSpreadsheet, Globe } from "lucide-react";
 import { COLORS, MANUAL_STATUS_OPTIONS } from "../lib/constants";
 import { computeStatus, isFlaggedNotARealCheckIn, fmtTime, fmtHrs, monthKey, daysInMonth, todayStr } from "../lib/utils";
 import { StatusPill, StatCard, selectStyle, th, td } from "../components/ui";
@@ -122,6 +121,21 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
     return map;
   }, [publicHolidays]);
 
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuHover, setMenuHover] = useState(null);
+  const menuRef = useRef(null);
+
+  // Close the download menu on an outside click or Escape, so it never
+  // sits open over the table after the user has moved on.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDown = (e) => { if (menuRef.current && !menuRef.current.contains(e.target)) { setMenuOpen(false); setMenuHover(null); } };
+    const onKey = (e) => { if (e.key === "Escape") setMenuOpen(false); };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); };
+  }, [menuOpen]);
+
   const emp = employees.find(e => e.id === empId) || employees[0];
   const shiftMonth = (delta) => {
     const [y, m] = ym.split("-").map(Number);
@@ -226,151 +240,95 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
   // row per day, with the same check-in/out, hours, status, and notes the HR
   // user is already looking at. `rows` is stored newest-first (see the
   // useMemo above), so this un-reverses it for a normal chronological sheet.
-  const handleExportExcel = () => {
-    // Laid out as a report rather than a raw dump: who it's for and which
-    // month at the top, the month's totals next, then the day-by-day table.
-    // Opened cold by someone who wasn't looking at this screen, the file has
-    // to explain itself.
-    //
-    // Note on formatting: the xlsx build bundled here writes values and
-    // layout (column widths, merges, filters) but drops fonts and colours,
-    // so readability is carried by structure and spacing instead.
-    const monthLabel = new Date(ym + "-01").toLocaleDateString([], { month: "long", year: "numeric" });
-
-    const dayRows = [...rows].reverse().map((r) => {
-      const officeHours = sessionHours(r.rec?.checkIn, r.rec?.checkOut);
-      const wfhHours = r.rec?.manualWfhHours != null ? r.rec.manualWfhHours : sessionHours(r.rec?.wfhCheckIn, r.rec?.wfhCheckOut);
-      const dayHours = r.rec?.manualTotalHours != null ? r.rec.manualTotalHours : totalWorkedHours(r.rec);
-      const hours = (hasAnySession(r.rec) || r.rec?.manualTotalHours != null) ? dayHours : null;
-      const wfhHoursShown = (r.rec?.wfhCheckIn && r.rec?.wfhCheckOut) || r.rec?.manualWfhHours != null;
-      const flaggedNotReal = isFlaggedNotARealCheckIn(r.rec);
-      const officeCheckinMissing = !flaggedNotReal && !r.rec?.checkIn && !!r.rec?.checkOut;
-      const wfhCheckinMissing = !r.rec?.wfhCheckIn && !!r.rec?.wfhCheckOut;
-      const d = new Date(r.date + "T00:00:00");
-
-      return [
-        d.toLocaleDateString([], { day: "2-digit", month: "short" }),
-        d.toLocaleDateString([], { weekday: "short" }),
-        r.status?.label || "",
-        flaggedNotReal || officeCheckinMissing ? "No check-in" : (r.rec?.checkIn ? fmtTime(r.rec.checkIn) : "—"),
-        flaggedNotReal
-          ? fmtTime(r.rec.checkIn) + " (likely checkout)"
-          : officeCheckinMissing ? fmtTime(r.rec.checkOut)
-          : r.rec?.checkIn ? (r.rec?.checkOut ? fmtTime(r.rec.checkOut) : "No checkout") : "—",
-        (r.rec?.checkIn && r.rec?.checkOut) ? Number(officeHours.toFixed(2)) : "",
-        wfhCheckinMissing ? "No check-in" : (r.rec?.wfhCheckIn ? fmtTime(r.rec.wfhCheckIn) : "—"),
-        r.rec?.wfhCheckIn ? (r.rec?.wfhCheckOut ? fmtTime(r.rec.wfhCheckOut) : "No checkout") : (wfhCheckinMissing ? fmtTime(r.rec.wfhCheckOut) : "—"),
-        wfhHoursShown ? Number(wfhHours.toFixed(2)) : "",
-        hours != null ? Number(hours.toFixed(2)) : "",
-        noteSummaryFor(r, holidayByDate) || "",
-      ];
-    });
-
-    const totalHours = dayRows.reduce((sum, r) => sum + (typeof r[9] === "number" ? r[9] : 0), 0);
-    const daysRecorded = dayRows.filter(r => r[2]).length;
-    const HEAD = ["Date", "Day", "Status", "Check-in", "Check-out", "Office Hrs",
-                  "WFH in", "WFH out", "WFH Hrs", "Total Hrs", "Notes"];
-
-    const aoa = [
-      ["RANKVIZ PVT. LTD. — MONTHLY ATTENDANCE"],
-      [emp.name + (emp.department && emp.department !== "Unassigned" ? "  ·  " + emp.department : "")],
-      [monthLabel],
-      [],
-      ["SUMMARY"],
-      ["Present", stats.present, "", "Late", stats.late, "", "Half day", stats.half, "", "Short leave", stats.shortLeave],
-      ["WFH", stats.wfh, "", "Leave", stats.leave, "", "Absent", stats.absent, "", "Alternate days", alternates.length],
-      ["Casual (CL)", stats.cl, "", "Sick (SL)", stats.sl, "", "Annual (AL)", stats.al, "", "Missing checkouts", noCheckouts.length],
-      ["Days recorded", daysRecorded, "", "Total hours", Number(totalHours.toFixed(2)), "", "Avg hrs/day", Number(stats.avgHours.toFixed(2)), "",
-       "Attendance", stats.attendancePct != null ? stats.attendancePct + "%" : "—"],
-      [],
-      ["DAY BY DAY"],
-      HEAD,
-      ...dayRows,
-      [],
-      ["", "", "TOTAL", "", "", "", "", "", "", Number(totalHours.toFixed(2)), ""],
-    ];
-
-    const ws = XLSX.utils.aoa_to_sheet(aoa);
-    const lastCol = HEAD.length - 1;
-    const headerRow = 11;                 // 0-based row index of HEAD above
-    const lastRow = aoa.length - 1;
-
-    // Titles span the table so they read as headings, not stray cells.
-    ws["!merges"] = [
-      { s: { r: 0, c: 0 }, e: { r: 0, c: lastCol } },
-      { s: { r: 1, c: 0 }, e: { r: 1, c: lastCol } },
-      { s: { r: 2, c: 0 }, e: { r: 2, c: lastCol } },
-      { s: { r: 4, c: 0 }, e: { r: 4, c: lastCol } },
-      { s: { r: 10, c: 0 }, e: { r: 10, c: lastCol } },
-    ];
-    ws["!cols"] = [
-      { wch: 11 }, { wch: 6 }, { wch: 14 }, { wch: 12 }, { wch: 24 }, { wch: 11 },
-      { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 11 }, { wch: 42 },
-    ];
-    // Headings get a little room; everything else stays default height.
-    ws["!rows"] = [{ hpt: 22 }, { hpt: 18 }];
-    // Filter on the day-by-day header, so a month can be narrowed to just the
-    // late days or just the leaves without touching the file. (Frozen panes
-    // aren't written by this build of the library, so they're not set here.)
-    ws["!autofilter"] = { ref: XLSX.utils.encode_range({ s: { r: headerRow, c: 0 }, e: { r: lastRow, c: lastCol } }) };
-
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Attendance");
-    XLSX.writeFile(wb, `${emp.name} - ${monthLabel}.xlsx`);
-  };
-
   // Coloured Excel export.
   // The bundled xlsx build writes values and layout but drops fonts and fill,
   // so this second export goes out as an HTML table instead. Excel and Google
   // Sheets both read that and keep the background colours, which is what makes
   // the file recognisable as the same report people already use on paper.
+  // Coloured Excel export.
+  // The bundled xlsx build writes values and layout but drops fonts and fill,
+  // so this export goes out as an HTML table instead. Excel and Google Sheets
+  // both read that and keep the background colours, which is what makes the
+  // file recognisable as the same report people already use on paper.
   const handleExportColoured = () => {
-    const monthLabel = new Date(ym + "-01").toLocaleDateString([], { month: "long", year: "numeric" });
-
-    // Same palette as the printed monthly sheet.
-    const FILL = {
-      navy: "#1F3864", present: "#B6D7A8", holiday: "#76E8F0", leave: "#FFF200",
-      half: "#F8CBAD", absent: "#FF9999", wfh: "#BDD7EE", extra: "#F4B183",
-      short: "#FFE699", head: "#D6DCE4", band: "#F2F2F2", line: "#9BB0CE",
-    };
-    const fillFor = (label = "") => {
-      const s = label.toLowerCase();
-      if (s.includes("present")) return FILL.present;
-      if (s.includes("holiday")) return FILL.holiday;
-      if (s.includes("short")) return FILL.short;
-      if (s.includes("half")) return FILL.half;
-      if (s.includes("absent")) return FILL.absent;
-      if (s.includes("wfh") || s.includes("home")) return FILL.wfh;
-      if (s.includes("alternate") || s.includes("extra")) return FILL.extra;
-      if (s.includes("leave")) return FILL.leave;
-      return "";
-    };
-
-    const esc = (v) => String(v ?? "").replace(/[&<>"]/g, (c) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    setMenuOpen(false);
+    const { monthLabel, built, totalHours, who, statPairs } = exportMeta();
+    const SPAN = EXPORT_HEAD.length;
     const cell = (v, { bg = "", bold = false, align = "center", span = 1, color = "" } = {}) =>
       `<td colspan="${span}" style="border:1px solid ${FILL.line};font-family:Arial;font-size:11pt;` +
       `text-align:${align};${bg ? `background-color:${bg};` : ""}${color ? `color:${color};` : ""}` +
-      `${bold ? "font-weight:bold;" : ""}">${esc(v)}</td>`;
+      `${bold ? "font-weight:bold;" : ""}">${escHtml(v)}</td>`;
 
-    const HEAD = ["Date", "Day", "Status", "Check-in", "Check-out", "Office Hrs",
-                  "WFH in", "WFH out", "WFH Hrs", "Total Hrs", "Notes"];
-    const SPAN = HEAD.length;
+    const body = built.map((r) =>
+      "<tr>" + r.cells.map((v, i) => cell(v, {
+        bg: (i === 2 || i === 10) ? r.bg : "",
+        bold: i === 2,
+        align: i === 10 ? "left" : "center",
+      })).join("") + "</tr>").join("");
 
-    const body = [...rows].reverse().map((r) => {
-      const officeHours = sessionHours(r.rec?.checkIn, r.rec?.checkOut);
-      const wfhHours = r.rec?.manualWfhHours != null ? r.rec.manualWfhHours : sessionHours(r.rec?.wfhCheckIn, r.rec?.wfhCheckOut);
-      const dayHours = r.rec?.manualTotalHours != null ? r.rec.manualTotalHours : totalWorkedHours(r.rec);
-      const hours = (hasAnySession(r.rec) || r.rec?.manualTotalHours != null) ? dayHours : null;
-      const wfhShown = (r.rec?.wfhCheckIn && r.rec?.wfhCheckOut) || r.rec?.manualWfhHours != null;
-      const flagged = isFlaggedNotARealCheckIn(r.rec);
-      const officeMissing = !flagged && !r.rec?.checkIn && !!r.rec?.checkOut;
-      const wfhMissing = !r.rec?.wfhCheckIn && !!r.rec?.wfhCheckOut;
-      const d = new Date(r.date + "T00:00:00");
-      const label = r.status?.label || "";
-      const bg = fillFor(label);
+    const html =
+      `<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8">` +
+      `<!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>` +
+      `<x:Name>Attendance</x:Name><x:WorksheetOptions><x:DisplayGridlines/>` +
+      `</x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->` +
+      `</head><body><table style="border-collapse:collapse">` +
+      `<tr>${cell("RANKVIZ PVT. LTD.  |  MONTHLY ATTENDANCE", { bg: FILL.navy, color: "#FFFFFF", bold: true, span: SPAN })}</tr>` +
+      `<tr>${cell(who + "  ·  " + monthLabel, { bold: true, align: "left", span: SPAN })}</tr>` +
+      `<tr>${cell("CL = Casual Leave  |  SL = Sick Leave  |  AL = Annual Leave  |  WFH = Work From Home  |  H = Holiday", { align: "left", span: SPAN })}</tr>` +
+      `<tr>${cell("SUMMARY", { bg: FILL.navy, color: "#FFFFFF", bold: true, span: SPAN })}</tr>` +
+      `<tr>${statPairs.map(([k]) => cell(k, { bg: FILL.head, bold: true })).join("")}</tr>` +
+      `<tr>${statPairs.map(([, v]) => cell(v, { bg: FILL.band, bold: true })).join("")}</tr>` +
+      `<tr>${cell("DAY BY DAY", { bg: FILL.navy, color: "#FFFFFF", bold: true, span: SPAN })}</tr>` +
+      `<tr>${EXPORT_HEAD.map((h) => cell(h, { bg: FILL.navy, color: "#FFFFFF", bold: true })).join("")}</tr>` +
+      body +
+      `<tr>${cell("TOTAL", { bg: FILL.head, bold: true, span: 9 })}${cell(totalHours.toFixed(2), { bg: FILL.head, bold: true })}${cell("", { bg: FILL.head })}</tr>` +
+      `</table></body></html>`;
 
-      const vals = [
+    saveBlob(html, "application/vnd.ms-excel", `${emp.name} - ${monthLabel}.xls`);
+  };
+
+  // Shared by both exports: the day rows already formatted for output, plus
+  // the fill colour each status should carry. Keeping one builder means the
+  // Excel file and the HTML page can never drift apart.
+  const FILL = {
+    navy: "#1F3864", present: "#B6D7A8", holiday: "#76E8F0", leave: "#FFF200",
+    half: "#F8CBAD", absent: "#FF9999", wfh: "#BDD7EE", extra: "#F4B183",
+    short: "#FFE699", head: "#D6DCE4", band: "#F2F2F2", line: "#9BB0CE",
+  };
+  const fillFor = (label = "") => {
+    const s = label.toLowerCase();
+    if (s.includes("present")) return FILL.present;
+    if (s.includes("holiday")) return FILL.holiday;
+    if (s.includes("short")) return FILL.short;
+    if (s.includes("half")) return FILL.half;
+    if (s.includes("absent")) return FILL.absent;
+    if (s.includes("wfh") || s.includes("home")) return FILL.wfh;
+    if (s.includes("alternate") || s.includes("extra")) return FILL.extra;
+    if (s.includes("leave")) return FILL.leave;
+    return "";
+  };
+  const escHtml = (v) => String(v ?? "").replace(/[&<>"]/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  const EXPORT_HEAD = ["Date", "Day", "Status", "Check-in", "Check-out", "Office Hrs",
+                       "WFH in", "WFH out", "WFH Hrs", "Total Hrs", "Notes"];
+
+  const buildExportRows = () => [...rows].reverse().map((r) => {
+    const officeHours = sessionHours(r.rec?.checkIn, r.rec?.checkOut);
+    const wfhHours = r.rec?.manualWfhHours != null ? r.rec.manualWfhHours : sessionHours(r.rec?.wfhCheckIn, r.rec?.wfhCheckOut);
+    const dayHours = r.rec?.manualTotalHours != null ? r.rec.manualTotalHours : totalWorkedHours(r.rec);
+    const hours = (hasAnySession(r.rec) || r.rec?.manualTotalHours != null) ? dayHours : null;
+    const wfhShown = (r.rec?.wfhCheckIn && r.rec?.wfhCheckOut) || r.rec?.manualWfhHours != null;
+    const flagged = isFlaggedNotARealCheckIn(r.rec);
+    const officeMissing = !flagged && !r.rec?.checkIn && !!r.rec?.checkOut;
+    const wfhMissing = !r.rec?.wfhCheckIn && !!r.rec?.wfhCheckOut;
+    const d = new Date(r.date + "T00:00:00");
+    const label = r.status?.label || "";
+    return {
+      label,
+      bg: fillFor(label),
+      hours,
+      cells: [
         d.toLocaleDateString([], { day: "2-digit", month: "short" }),
         d.toLocaleDateString([], { weekday: "short" }),
         label,
@@ -385,53 +343,87 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
         wfhShown ? wfhHours.toFixed(2) : "",
         hours != null ? hours.toFixed(2) : "",
         noteSummaryFor(r, holidayByDate) || "",
-      ];
-      return "<tr>" + vals.map((v, i) =>
-        cell(v, {
-          bg: (i === 2 || i === 10) ? bg : "",
-          bold: i === 2,
-          align: i === 10 ? "left" : "center",
-        })).join("") + "</tr>";
-    }).join("");
+      ],
+    };
+  });
 
-    const totalHours = [...rows].reduce((sum, r) => {
-      const h = r.rec?.manualTotalHours != null ? r.rec.manualTotalHours : totalWorkedHours(r.rec);
-      return sum + ((hasAnySession(r.rec) || r.rec?.manualTotalHours != null) ? h : 0);
-    }, 0);
-
+  const exportMeta = () => {
+    const monthLabel = new Date(ym + "-01").toLocaleDateString([], { month: "long", year: "numeric" });
+    const built = buildExportRows();
+    const totalHours = built.reduce((s, r) => s + (r.hours != null ? r.hours : 0), 0);
+    const who = emp.name + (emp.department && emp.department !== "Unassigned" ? "  ·  " + emp.department : "");
     const statPairs = [
       ["Present", stats.present], ["Late", stats.late], ["Half day", stats.half],
       ["Short leave", stats.shortLeave], ["WFH", stats.wfh], ["Leave", stats.leave],
       ["Absent", stats.absent], ["Casual (CL)", stats.cl], ["Sick (SL)", stats.sl],
       ["Annual (AL)", stats.al], ["Total hours", totalHours.toFixed(2)],
     ];
+    return { monthLabel, built, totalHours, who, statPairs };
+  };
 
-    const html =
-      `<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8">` +
-      `<!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>` +
-      `<x:Name>Attendance</x:Name><x:WorksheetOptions><x:DisplayGridlines/>` +
-      `</x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->` +
-      `</head><body><table style="border-collapse:collapse">` +
-      `<tr>${cell("RANKVIZ PVT. LTD.  |  MONTHLY ATTENDANCE", { bg: FILL.navy, color: "#FFFFFF", bold: true, span: SPAN })}</tr>` +
-      `<tr>${cell(emp.name + (emp.department && emp.department !== "Unassigned" ? "  ·  " + emp.department : "") + "  ·  " + monthLabel, { bold: true, align: "left", span: SPAN })}</tr>` +
-      `<tr>${cell("CL = Casual Leave  |  SL = Sick Leave  |  AL = Annual Leave  |  WFH = Work From Home  |  H = Holiday", { align: "left", span: SPAN })}</tr>` +
-      `<tr>${cell("SUMMARY", { bg: FILL.navy, color: "#FFFFFF", bold: true, span: SPAN })}</tr>` +
-      `<tr>${statPairs.map(([k]) => cell(k, { bg: FILL.head, bold: true })).join("")}</tr>` +
-      `<tr>${statPairs.map(([, v]) => cell(v, { bg: FILL.band, bold: true })).join("")}</tr>` +
-      `<tr>${cell("DAY BY DAY", { bg: FILL.navy, color: "#FFFFFF", bold: true, span: SPAN })}</tr>` +
-      `<tr>${HEAD.map((h) => cell(h, { bg: FILL.navy, color: "#FFFFFF", bold: true })).join("")}</tr>` +
-      body +
-      `<tr>${cell("TOTAL", { bg: FILL.head, bold: true, span: 9 })}${cell(totalHours.toFixed(2), { bg: FILL.head, bold: true })}${cell("", { bg: FILL.head })}</tr>` +
-      `</table></body></html>`;
-
-    const blob = new Blob(["\ufeff", html], { type: "application/vnd.ms-excel" });
+  const saveBlob = (content, type, filename) => {
     const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `${emp.name} - ${monthLabel} (coloured).xls`;
+    a.href = URL.createObjectURL(new Blob(["\ufeff", content], { type }));
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  };
+
+  // A standalone page that looks like the report on screen: nothing to click,
+  // nothing to edit, opens in any browser and prints as-is. For sending to
+  // someone who only needs to read it.
+  const handleExportHtml = () => {
+    setMenuOpen(false);
+    const { monthLabel, built, totalHours, who, statPairs } = exportMeta();
+
+    const cards = statPairs.map(([k, v]) =>
+      `<div class="card"><div class="v">${escHtml(v)}</div><div class="k">${escHtml(k)}</div></div>`).join("");
+
+    const body = built.map((r) =>
+      "<tr>" + r.cells.map((v, i) =>
+        `<td class="${i === 2 ? "st" : ""}${i === 10 ? " notes" : ""}"${
+          i === 2 && r.bg ? ` style="background:${r.bg}"` : ""}>${escHtml(v)}</td>`
+      ).join("") + "</tr>").join("");
+
+    const page = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${escHtml(emp.name)} — ${escHtml(monthLabel)}</title>
+<style>
+ body{margin:0;background:#EDF1F7;color:#1a1a1a;font:13px/1.5 Arial,Helvetica,sans-serif}
+ .page{max-width:1180px;margin:0 auto;padding:22px 16px 50px}
+ .band{background:${FILL.navy};color:#fff;padding:16px 18px}
+ .band h1{margin:0;font-size:17px;letter-spacing:.3px}
+ .band p{margin:4px 0 0;font-size:13px;opacity:.85}
+ .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(126px,1fr));
+        gap:8px;margin:14px 0}
+ .card{background:#fff;border:1px solid ${FILL.line};padding:10px 12px}
+ .card .v{font-size:19px;font-weight:700}
+ .card .k{font-size:11.5px;color:#44566f;margin-top:2px}
+ table{width:100%;border-collapse:collapse;background:#fff;font-size:12.5px}
+ th,td{border:1px solid ${FILL.line};padding:5px 8px;text-align:center;white-space:nowrap}
+ th{background:${FILL.navy};color:#fff;font-size:11.5px}
+ td.st{font-weight:700}
+ td.notes{text-align:left;white-space:normal;min-width:220px}
+ tfoot td{background:${FILL.head};font-weight:700}
+ .legend{margin:10px 0 0;font-size:11.5px;color:#44566f}
+ .wrap{overflow:auto;border:1px solid ${FILL.line}}
+ @media print{body{background:#fff}.page{padding:0}
+   *{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+</style></head><body><div class="page">
+ <div class="band"><h1>RANKVIZ PVT. LTD. — Monthly attendance</h1>
+   <p>${escHtml(who)} &nbsp;·&nbsp; ${escHtml(monthLabel)}</p></div>
+ <div class="cards">${cards}</div>
+ <div class="wrap"><table>
+  <thead><tr>${EXPORT_HEAD.map(h => `<th>${escHtml(h)}</th>`).join("")}</tr></thead>
+  <tbody>${body}</tbody>
+  <tfoot><tr><td colspan="9">TOTAL</td><td>${totalHours.toFixed(2)}</td><td></td></tr></tfoot>
+ </table></div>
+ <p class="legend">CL = Casual Leave · SL = Sick Leave · AL = Annual Leave · WFH = Work From Home · H = Holiday</p>
+</div></body></html>`;
+
+    saveBlob(page, "text/html;charset=utf-8", `${emp.name} - ${monthLabel}.html`);
   };
 
   if (!emp) return <p style={{ color: COLORS.muted }}>No employees yet — add some in the Employees tab first.</p>;
@@ -493,29 +485,90 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
       <div className="rv-card" style={{ padding: "16px 20px", overflowX: "auto" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
           <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>Full attendance — {emp.name}</h3>
-          <button
-            onClick={handleExportExcel}
-            title="Download this employee's month as an Excel file"
-            style={{
-              display: "flex", alignItems: "center", gap: 6,
-              background: "#fff", border: `1px solid ${COLORS.line}`, borderRadius: 8,
-              padding: "7px 13px", fontSize: 13, fontWeight: 700, color: COLORS.ink, cursor: "pointer",
-            }}
-          >
-            <Download size={14} /> Download Excel
-          </button>
+          <div ref={menuRef} style={{ position: "relative" }}>
+            <button
+              onClick={() => setMenuOpen(o => !o)}
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              title="Download this employee's month"
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 7,
+                background: menuOpen ? "#EEF4FF" : "#fff",
+                border: `1.5px solid ${menuOpen ? COLORS.blue : COLORS.line}`,
+                borderRadius: 9, padding: "7px 12px", fontSize: 13, fontWeight: 700,
+                color: menuOpen ? "#2B4C9E" : COLORS.ink, cursor: "pointer",
+                transition: "border-color 120ms ease, background 120ms ease",
+              }}
+            >
+              <Download size={15} /> Download
+              <ChevronDown
+                size={14}
+                style={{ transform: menuOpen ? "rotate(180deg)" : "none", transition: "transform 140ms ease" }}
+              />
+            </button>
 
-          <button
-            onClick={handleExportColoured}
-            title="Download with the report colours, the way the printed sheet looks"
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 6,
-              background: "#fff", border: `1px solid ${COLORS.line}`, borderRadius: 8,
-              padding: "7px 13px", fontSize: 13, fontWeight: 700, color: COLORS.ink, cursor: "pointer",
-            }}
-          >
-            <Download size={14} /> Download coloured
-          </button>
+            {menuOpen && (
+              <div
+                role="menu"
+                className="rv-anim-fadein"
+                style={{
+                  position: "absolute", right: 0, top: "calc(100% + 8px)", zIndex: 40,
+                  background: "#fff", border: `1px solid ${COLORS.line}`, borderRadius: 12,
+                  boxShadow: "0 14px 34px rgba(20,32,60,.16)", overflow: "hidden",
+                  minWidth: 268, padding: 5,
+                }}
+              >
+                {[
+                  {
+                    key: "xls",
+                    icon: <FileSpreadsheet size={17} />,
+                    title: "Download Excel",
+                    hint: "Opens in Excel or Sheets, colours kept",
+                    tint: "#1E7A46", bg: "#E8F5EE",
+                    onClick: handleExportColoured,
+                  },
+                  {
+                    key: "html",
+                    icon: <Globe size={17} />,
+                    title: "Download HTML",
+                    hint: "Read-only page, looks like this screen",
+                    tint: "#2B4C9E", bg: "#EEF4FF",
+                    onClick: handleExportHtml,
+                  },
+                ].map((it) => (
+                  <button
+                    key={it.key}
+                    role="menuitem"
+                    onClick={it.onClick}
+                    onMouseEnter={() => setMenuHover(it.key)}
+                    onMouseLeave={() => setMenuHover(null)}
+                    onFocus={() => setMenuHover(it.key)}
+                    onBlur={() => setMenuHover(null)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 11, width: "100%",
+                      textAlign: "left", border: "none", borderRadius: 9, cursor: "pointer",
+                      padding: "9px 11px", font: "inherit",
+                      background: menuHover === it.key ? "#F4F7FC" : "transparent",
+                      transition: "background 110ms ease",
+                    }}
+                  >
+                    <span
+                      style={{
+                        display: "grid", placeItems: "center", width: 32, height: 32,
+                        borderRadius: 8, background: it.bg, color: it.tint, flex: "0 0 auto",
+                      }}
+                    >
+                      {it.icon}
+                    </span>
+                    <span style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: COLORS.ink }}>{it.title}</span>
+                      <span style={{ fontSize: 11.5, color: COLORS.muted }}>{it.hint}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
         <table className="rv-table-hover" style={{ width: "100%", borderCollapse: "collapse", minWidth: 940 }}>
           <thead>
