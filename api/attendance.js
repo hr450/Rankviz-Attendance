@@ -1,4 +1,6 @@
-// GET  /api/attendance                                     — load all attendance (logged-in users)
+// GET  /api/attendance?from=YYYY-MM-DD&to=YYYY-MM-DD       — load attendance for a date range
+//      (both optional; leaving them off still returns every date)
+//      An admin gets all employees; an employee gets only their own rows.
 // POST /api/attendance  { employeeId, date, rec, source }   — save a record (admin only)
 // Header: Authorization: Bearer <token from /api/auth/login>
 //
@@ -44,7 +46,29 @@ export default async function handler(req, res) {
 
   if (req.method === "GET") {
     try {
-      const rows = await supaAdminFetchAll("attendance?select=*");
+      // A date range keeps this from growing without limit. Attendance adds
+      // roughly 1,700 rows a month, so "everything" is a number that only
+      // ever goes up, and every byte of it lands in the browser on login.
+      // Filtering server-side means a year from now costs the same as today.
+      const { from, to } = req.query || {};
+      const isDate = (v) => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
+      let path = "attendance?select=*";
+      if (isDate(from)) path += `&date=gte.${from}`;
+      if (isDate(to)) path += `&date=lte.${to}`;
+
+      // An employee only ever needs their own days. This route used to hand
+      // the whole company's attendance to anyone with a login — every
+      // colleague's check-in and check-out times, which is not theirs to
+      // read — and it made each employee login pull thousands of rows it
+      // would then throw away. Sixty people signing in at nine in the
+      // morning turned that into a burst of hundreds of requests.
+      // HR still gets everyone, because that is the job.
+      if (caller.role !== "admin") {
+        if (!caller.employeeId) return res.status(200).json({});
+        path += `&employee_id=eq.${encodeURIComponent(caller.employeeId)}`;
+      }
+
+      const rows = await supaAdminFetchAll(path);
       const map = {};
       (rows || []).forEach(r => {
         map[`${r.employee_id}|${r.date}`] = {
