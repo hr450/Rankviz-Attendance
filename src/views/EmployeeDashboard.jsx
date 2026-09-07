@@ -788,10 +788,18 @@ function RecentActivity({ employee, attendance, now, period }) {
     const isPast = date < todayStr(now);
     const status = computeStatus(employee, rec, isPast, now.getHours() * 60 + now.getMinutes(), date);
     const flaggedIn = isFlaggedNotARealCheckIn(rec);
-    const inTime = flaggedIn ? "No check-in" : (fmtTime(rec?.checkIn) || fmtTime(rec?.wfhCheckIn));
-    const outTime = (rec?.checkIn && !rec?.checkOut) || (rec?.wfhCheckIn && !rec?.wfhCheckOut)
-      ? "No checkout" : (fmtTime(rec?.checkOut) || fmtTime(rec?.wfhCheckOut));
-    const hasTimes = (inTime && inTime !== "No check-in") || outTime;
+    // Office and work-from-home are shown as separate pairs rather than
+    // folded into one In/Out. A weekend worked from home used to read
+    // "In: — Out: — Hours: 5h 13m", which looks like the hours came from
+    // nowhere; the WFH times are what those hours are made of, so they
+    // belong on screen next to them.
+    const officeIn = flaggedIn ? "No check-in" : fmtTime(rec?.checkIn);
+    const officeOut = (rec?.checkIn && !rec?.checkOut) ? "No checkout" : fmtTime(rec?.checkOut);
+    const wfhIn = fmtTime(rec?.wfhCheckIn);
+    const wfhOut = (rec?.wfhCheckIn && !rec?.wfhCheckOut) ? "No checkout" : fmtTime(rec?.wfhCheckOut);
+    const hasOffice = !!(officeIn || officeOut) || flaggedIn;
+    const hasWfh = !!(wfhIn || wfhOut);
+    const hasTimes = hasOffice || hasWfh;
     const dayHours = dayHoursFor(rec);
     return (
       <div key={date} className="rv-row rv-dark-row" style={{
@@ -806,11 +814,23 @@ function RecentActivity({ employee, attendance, now, period }) {
             }} />
             {new Date(date + "T00:00:00").toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}
           </span>
-          {(hasTimes || flaggedIn) && (
+          {hasTimes && (
             <div style={{ fontSize: 12, color: "var(--rv-muted)", marginTop: 2, marginLeft: 16 }}>
-              In: <strong style={{ color: flaggedIn ? COLORS.red : "var(--rv-ink)" }}>{inTime || "—"}</strong>
-              {"  ·  "}
-              Out: <strong style={{ color: outTime === "No checkout" ? COLORS.red : "var(--rv-ink)" }}>{outTime || "—"}</strong>
+              {hasOffice && (
+                <>
+                  In: <strong style={{ color: flaggedIn ? COLORS.red : "var(--rv-ink)" }}>{officeIn || "—"}</strong>
+                  {"  ·  "}
+                  Out: <strong style={{ color: officeOut === "No checkout" ? COLORS.red : "var(--rv-ink)" }}>{officeOut || "—"}</strong>
+                </>
+              )}
+              {hasWfh && (
+                <>
+                  {hasOffice && "  ·  "}
+                  WFH: <strong style={{ color: "var(--rv-ink)" }}>{wfhIn || "—"}</strong>
+                  {" – "}
+                  <strong style={{ color: wfhOut === "No checkout" ? COLORS.red : "var(--rv-ink)" }}>{wfhOut || "—"}</strong>
+                </>
+              )}
               {dayHours > 0 && <> {"  ·  "}Hours: <strong style={{ color: "var(--rv-ink)" }}>{fmtHrs(dayHours)}</strong></>}
             </div>
           )}

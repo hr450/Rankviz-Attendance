@@ -227,7 +227,17 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
   // user is already looking at. `rows` is stored newest-first (see the
   // useMemo above), so this un-reverses it for a normal chronological sheet.
   const handleExportExcel = () => {
-    const exportRows = [...rows].reverse().map((r) => {
+    // Laid out as a report rather than a raw dump: who it's for and which
+    // month at the top, the month's totals next, then the day-by-day table.
+    // Opened cold by someone who wasn't looking at this screen, the file has
+    // to explain itself.
+    //
+    // Note on formatting: the xlsx build bundled here writes values and
+    // layout (column widths, merges, filters) but drops fonts and colours,
+    // so readability is carried by structure and spacing instead.
+    const monthLabel = new Date(ym + "-01").toLocaleDateString([], { month: "long", year: "numeric" });
+
+    const dayRows = [...rows].reverse().map((r) => {
       const officeHours = sessionHours(r.rec?.checkIn, r.rec?.checkOut);
       const wfhHours = r.rec?.manualWfhHours != null ? r.rec.manualWfhHours : sessionHours(r.rec?.wfhCheckIn, r.rec?.wfhCheckOut);
       const dayHours = r.rec?.manualTotalHours != null ? r.rec.manualTotalHours : totalWorkedHours(r.rec);
@@ -236,32 +246,76 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
       const flaggedNotReal = isFlaggedNotARealCheckIn(r.rec);
       const officeCheckinMissing = !flaggedNotReal && !r.rec?.checkIn && !!r.rec?.checkOut;
       const wfhCheckinMissing = !r.rec?.wfhCheckIn && !!r.rec?.wfhCheckOut;
+      const d = new Date(r.date + "T00:00:00");
 
-      return {
-        Date: new Date(r.date + "T00:00:00").toLocaleDateString([], { weekday: "short", year: "numeric", month: "short", day: "numeric" }),
-        Status: r.status?.label || "",
-        "Check-in": flaggedNotReal ? "No check-in" : officeCheckinMissing ? "No check-in" : (r.rec?.checkIn ? fmtTime(r.rec.checkIn) : ""),
-        "Check-out": flaggedNotReal
-          ? `${fmtTime(r.rec.checkIn)} (likely checkout — no check-in recorded)`
+      return [
+        d.toLocaleDateString([], { day: "2-digit", month: "short" }),
+        d.toLocaleDateString([], { weekday: "short" }),
+        r.status?.label || "",
+        flaggedNotReal || officeCheckinMissing ? "No check-in" : (r.rec?.checkIn ? fmtTime(r.rec.checkIn) : "—"),
+        flaggedNotReal
+          ? fmtTime(r.rec.checkIn) + " (likely checkout)"
           : officeCheckinMissing ? fmtTime(r.rec.checkOut)
-          : r.rec?.checkIn ? (r.rec?.checkOut ? fmtTime(r.rec.checkOut) : "No checkout") : "",
-        "Office Hours": (r.rec?.checkIn && r.rec?.checkOut) ? Number(officeHours.toFixed(2)) : "",
-        "WFH in": wfhCheckinMissing ? "No check-in" : (r.rec?.wfhCheckIn ? fmtTime(r.rec.wfhCheckIn) : ""),
-        "WFH out": r.rec?.wfhCheckIn ? (r.rec?.wfhCheckOut ? fmtTime(r.rec.wfhCheckOut) : "No checkout") : (wfhCheckinMissing ? fmtTime(r.rec.wfhCheckOut) : ""),
-        "WFH Hours": wfhHoursShown ? Number(wfhHours.toFixed(2)) : "",
-        "Total Hours": hours != null ? Number(hours.toFixed(2)) : "",
-        Notes: noteSummaryFor(r, holidayByDate),
-      };
+          : r.rec?.checkIn ? (r.rec?.checkOut ? fmtTime(r.rec.checkOut) : "No checkout") : "—",
+        (r.rec?.checkIn && r.rec?.checkOut) ? Number(officeHours.toFixed(2)) : "",
+        wfhCheckinMissing ? "No check-in" : (r.rec?.wfhCheckIn ? fmtTime(r.rec.wfhCheckIn) : "—"),
+        r.rec?.wfhCheckIn ? (r.rec?.wfhCheckOut ? fmtTime(r.rec.wfhCheckOut) : "No checkout") : (wfhCheckinMissing ? fmtTime(r.rec.wfhCheckOut) : "—"),
+        wfhHoursShown ? Number(wfhHours.toFixed(2)) : "",
+        hours != null ? Number(hours.toFixed(2)) : "",
+        noteSummaryFor(r, holidayByDate) || "",
+      ];
     });
 
-    const ws = XLSX.utils.json_to_sheet(exportRows);
-    ws["!cols"] = [
-      { wch: 18 }, { wch: 12 }, { wch: 10 }, { wch: 36 },
-      { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 45 },
+    const totalHours = dayRows.reduce((sum, r) => sum + (typeof r[9] === "number" ? r[9] : 0), 0);
+    const daysRecorded = dayRows.filter(r => r[2]).length;
+    const HEAD = ["Date", "Day", "Status", "Check-in", "Check-out", "Office Hrs",
+                  "WFH in", "WFH out", "WFH Hrs", "Total Hrs", "Notes"];
+
+    const aoa = [
+      ["RANKVIZ PVT. LTD. — MONTHLY ATTENDANCE"],
+      [emp.name + (emp.department && emp.department !== "Unassigned" ? "  ·  " + emp.department : "")],
+      [monthLabel],
+      [],
+      ["SUMMARY"],
+      ["Present", stats.present, "", "Late", stats.late, "", "Half day", stats.half, "", "Short leave", stats.shortLeave],
+      ["WFH", stats.wfh, "", "Leave", stats.leave, "", "Absent", stats.absent, "", "Alternate days", alternates.length],
+      ["Casual (CL)", stats.cl, "", "Sick (SL)", stats.sl, "", "Annual (AL)", stats.al, "", "Missing checkouts", noCheckouts.length],
+      ["Days recorded", daysRecorded, "", "Total hours", Number(totalHours.toFixed(2)), "", "Avg hrs/day", Number(stats.avgHours.toFixed(2)), "",
+       "Attendance", stats.attendancePct != null ? stats.attendancePct + "%" : "—"],
+      [],
+      ["DAY BY DAY"],
+      HEAD,
+      ...dayRows,
+      [],
+      ["", "", "TOTAL", "", "", "", "", "", "", Number(totalHours.toFixed(2)), ""],
     ];
+
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    const lastCol = HEAD.length - 1;
+    const headerRow = 11;                 // 0-based row index of HEAD above
+    const lastRow = aoa.length - 1;
+
+    // Titles span the table so they read as headings, not stray cells.
+    ws["!merges"] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: lastCol } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: lastCol } },
+      { s: { r: 2, c: 0 }, e: { r: 2, c: lastCol } },
+      { s: { r: 4, c: 0 }, e: { r: 4, c: lastCol } },
+      { s: { r: 10, c: 0 }, e: { r: 10, c: lastCol } },
+    ];
+    ws["!cols"] = [
+      { wch: 11 }, { wch: 6 }, { wch: 14 }, { wch: 12 }, { wch: 24 }, { wch: 11 },
+      { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 11 }, { wch: 42 },
+    ];
+    // Headings get a little room; everything else stays default height.
+    ws["!rows"] = [{ hpt: 22 }, { hpt: 18 }];
+    // Filter on the day-by-day header, so a month can be narrowed to just the
+    // late days or just the leaves without touching the file. (Frozen panes
+    // aren't written by this build of the library, so they're not set here.)
+    ws["!autofilter"] = { ref: XLSX.utils.encode_range({ s: { r: headerRow, c: 0 }, e: { r: lastRow, c: lastCol } }) };
+
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Attendance");
-    const monthLabel = new Date(ym + "-01").toLocaleDateString([], { month: "long", year: "numeric" });
     XLSX.writeFile(wb, `${emp.name} - ${monthLabel}.xlsx`);
   };
 
