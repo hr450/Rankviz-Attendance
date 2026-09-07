@@ -104,7 +104,9 @@ function noteSummaryFor(r, holidayByDate) {
   const code = leaveCodeFor(r.rec);
   if (code) parts.push(code === "ShortLeave" ? "Short Leave" : code);
   if (r.rec?.notes) parts.push(r.rec.notes);
-  if (r.rec?.manuallyEdited) parts.push(r.rec.editedBy ? `Edited by ${r.rec.editedBy}` : "Edited");
+  // The "Edited by <user id>" flag is deliberately left out. On screen it is a
+  // small badge for whoever is fixing records; in a downloaded report it just
+  // repeats a raw user id on nearly every row and crowds out the real note.
   return parts.join(" | ");
 }
 
@@ -281,7 +283,7 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
       `<tr>${cell("DAY BY DAY", { bg: FILL.navy, color: "#FFFFFF", bold: true, span: SPAN })}</tr>` +
       `<tr>${EXPORT_HEAD.map((h) => cell(h, { bg: FILL.navy, color: "#FFFFFF", bold: true })).join("")}</tr>` +
       body +
-      `<tr>${cell("TOTAL", { bg: FILL.head, bold: true, span: 9 })}${cell(totalHours.toFixed(2), { bg: FILL.head, bold: true })}${cell("", { bg: FILL.head })}</tr>` +
+      `<tr>${cell("TOTAL", { bg: FILL.head, bold: true, span: 9 })}${cell(fmtHrs(totalHours), { bg: FILL.head, bold: true })}${cell("", { bg: FILL.head })}</tr>` +
       `</table></body></html>`;
 
     saveBlob(html, "application/vnd.ms-excel", `${emp.name} - ${monthLabel}.xls`);
@@ -336,12 +338,12 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
         flagged ? fmtTime(r.rec.checkIn) + " (likely checkout)"
           : officeMissing ? fmtTime(r.rec.checkOut)
           : r.rec?.checkIn ? (r.rec?.checkOut ? fmtTime(r.rec.checkOut) : "No checkout") : "—",
-        (r.rec?.checkIn && r.rec?.checkOut) ? officeHours.toFixed(2) : "",
+        (r.rec?.checkIn && r.rec?.checkOut) ? fmtHrs(officeHours) : "",
         wfhMissing ? "No check-in" : (r.rec?.wfhCheckIn ? fmtTime(r.rec.wfhCheckIn) : "—"),
         r.rec?.wfhCheckIn ? (r.rec?.wfhCheckOut ? fmtTime(r.rec.wfhCheckOut) : "No checkout")
           : (wfhMissing ? fmtTime(r.rec.wfhCheckOut) : "—"),
-        wfhShown ? wfhHours.toFixed(2) : "",
-        hours != null ? hours.toFixed(2) : "",
+        wfhShown ? fmtHrs(wfhHours) : "",
+        hours != null ? fmtHrs(hours) : "",
         noteSummaryFor(r, holidayByDate) || "",
       ],
     };
@@ -356,7 +358,7 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
       ["Present", stats.present], ["Late", stats.late], ["Half day", stats.half],
       ["Short leave", stats.shortLeave], ["WFH", stats.wfh], ["Leave", stats.leave],
       ["Absent", stats.absent], ["Casual (CL)", stats.cl], ["Sick (SL)", stats.sl],
-      ["Annual (AL)", stats.al], ["Total hours", totalHours.toFixed(2)],
+      ["Annual (AL)", stats.al], ["Total hours", fmtHrs(totalHours)],
     ];
     return { monthLabel, built, totalHours, who, statPairs };
   };
@@ -418,7 +420,7 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
  <div class="wrap"><table>
   <thead><tr>${EXPORT_HEAD.map(h => `<th>${escHtml(h)}</th>`).join("")}</tr></thead>
   <tbody>${body}</tbody>
-  <tfoot><tr><td colspan="9">TOTAL</td><td>${totalHours.toFixed(2)}</td><td></td></tr></tfoot>
+  <tfoot><tr><td colspan="9">TOTAL</td><td>${escHtml(fmtHrs(totalHours))}</td><td></td></tr></tfoot>
  </table></div>
  <p class="legend">CL = Casual Leave · SL = Sick Leave · AL = Annual Leave · WFH = Work From Home · H = Holiday</p>
 </div></body></html>`;
