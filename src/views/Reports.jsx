@@ -6,6 +6,7 @@ import {
 import { COLORS, GRACE_MIN, HALFDAY_HOURS } from "../lib/constants";
 import { computeStatus, fmtHrs, monthKey, daysInMonth, todayStr } from "../lib/utils";
 import { th, td, StatCard } from "../components/ui";
+import SelectMenu from "../components/SelectMenu";
 
 export default function ReportsView({ employees, attendance, now }) {
   const [ym, setYm] = useState(monthKey(todayStr(now)));
@@ -134,11 +135,18 @@ export default function ReportsView({ employees, attendance, now }) {
               style={{ ...searchInput }}
             />
           </div>
-          <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={sortSelect}>
-            <option value="name">Sort by name</option>
-            <option value="attendance">Sort by attendance</option>
-            <option value="absent">Sort by absent days</option>
-          </select>
+          <SelectMenu
+            value={sortBy}
+            onChange={setSortBy}
+            options={[
+              { value: "name", label: "Sort by name" },
+              { value: "attendance", label: "Sort by attendance" },
+              { value: "absent", label: "Sort by absent days" },
+            ]}
+            minWidth={190}
+            align="right"
+            ariaLabel="Sort"
+          />
         </div>
 
         <table className="rv-table-hover" style={{ width: "100%", borderCollapse: "collapse", minWidth: 900 }}>

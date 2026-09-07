@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { COLORS } from "../lib/constants";
 import { computeStatus, fmtTime, fmtHrs, todayStr } from "../lib/utils";
 import { StatusPill, selectStyle, th, td } from "../components/ui";
+import SelectMenu from "../components/SelectMenu";
 
 export default function LogView({ employees, attendance, now }) {
   const [empFilter, setEmpFilter] = useState("all");
@@ -36,10 +37,14 @@ export default function LogView({ employees, attendance, now }) {
       <h1 className="rv-header-in" style={{ fontSize: 26, fontWeight: 800, margin: "0 0 18px" }}>Attendance Log</h1>
 
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 18 }}>
-        <select value={empFilter} onChange={e => setEmpFilter(e.target.value)} style={selectStyle}>
-          <option value="all">All employees</option>
-          {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-        </select>
+        <SelectMenu
+          value={empFilter}
+          onChange={setEmpFilter}
+          options={[{ value: "all", label: "All employees" },
+                    ...employees.map(e => ({ value: e.id, label: e.name }))]}
+          minWidth={190}
+          ariaLabel="Employee"
+        />
         <input type="date" value={start} onChange={e => setStart(e.target.value)} style={selectStyle} />
         <span style={{ alignSelf: "center", color: COLORS.muted }}>to</span>
         <input type="date" value={end} onChange={e => setEnd(e.target.value)} style={selectStyle} />

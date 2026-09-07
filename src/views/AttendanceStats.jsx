@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { COLORS } from "../lib/constants";
 import { computeStatus, monthKey, daysInMonth, todayStr } from "../lib/utils";
 import { StatCard, selectStyle, th, td } from "../components/ui";
+import SelectMenu from "../components/SelectMenu";
 
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const EMPTY_TOTALS = { present: 0, late: 0, half: 0, wfh: 0, shortLeave: 0, leave: 0, absent: 0, holiday: 0, noCheckout: 0 };
@@ -102,9 +103,14 @@ export default function AttendanceStatsView({ employees, attendance, now, public
               <button onClick={() => shiftMonth(1)} style={navBtn}><ChevronRight size={16} /></button>
             </div>
           ) : (
-            <select value={year} onChange={e => setYear(Number(e.target.value))} style={{ ...selectStyle, width: "auto" }}>
-              {yearOptions(now).map(y => <option key={y} value={y}>{y}</option>)}
-            </select>
+            <SelectMenu
+              value={year}
+              onChange={setYear}
+              options={yearOptions(now).map(y => ({ value: y, label: String(y) }))}
+              minWidth={110}
+              align="right"
+              ariaLabel="Year"
+            />
           )}
         </div>
       </div>

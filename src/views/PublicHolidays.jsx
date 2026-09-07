@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Trash2, CalendarPlus, RefreshCw } from "lucide-react";
 import { COLORS } from "../lib/constants";
 import { th, td } from "../components/ui";
+import SelectMenu from "../components/SelectMenu";
 
 // Point 2 — manually maintained public holiday list. Any date added here
 // automatically shows up as a note on that day in Monthly Report (and
@@ -77,9 +78,13 @@ export default function PublicHolidaysView({ holidays, onAdd, onRemove }) {
           Pulls official Pakistan public holidays automatically. Only adds dates you don't already have — won't touch anything you've added or edited.
         </p>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-          <select value={syncYear} onChange={e => setSyncYear(Number(e.target.value))} style={inputStyle}>
-            {[currentYear - 1, currentYear, currentYear + 1].map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
+          <SelectMenu
+            value={syncYear}
+            onChange={setSyncYear}
+            options={[currentYear - 1, currentYear, currentYear + 1].map(y => ({ value: y, label: String(y) }))}
+            minWidth={110}
+            ariaLabel="Year"
+          />
           <button onClick={handleSync} disabled={syncing} style={primaryBtn}>
             <RefreshCw size={14} /> {syncing ? "Fetching…" : "Fetch Pakistan holidays"}
           </button>

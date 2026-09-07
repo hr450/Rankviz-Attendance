@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, ChevronDown, Coffee, Repeat, Home, Pencil, X
 import { COLORS, MANUAL_STATUS_OPTIONS } from "../lib/constants";
 import { computeStatus, isFlaggedNotARealCheckIn, fmtTime, fmtHrs, monthKey, daysInMonth, todayStr } from "../lib/utils";
 import { StatusPill, StatCard, selectStyle, th, td } from "../components/ui";
+import SelectMenu from "../components/SelectMenu";
 
 // Nicer look for the Status-Edit dropdown and the employee/month pickers —
 // layered on top of the shared `selectStyle` from components/ui so we don't
@@ -435,9 +436,13 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
       <h1 className="rv-header-in" style={{ fontSize: 26, fontWeight: 800, margin: "0 0 18px" }}>Monthly Report</h1>
 
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 20 }}>
-        <select value={empId} onChange={e => setEmpId(e.target.value)} style={{ ...statusSelectStyle(empId), minWidth: 220, fontWeight: 700 }}>
-          {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-        </select>
+        <SelectMenu
+          value={empId}
+          onChange={setEmpId}
+          options={employees.map(e => ({ value: e.id, label: e.name }))}
+          minWidth={240}
+          ariaLabel="Employee"
+        />
         <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#fff", borderRadius: 10, padding: "6px 10px", border: `1px solid ${COLORS.line}` }}>
           <button onClick={() => shiftMonth(-1)} style={navBtn}><ChevronLeft size={16} /></button>
           <span style={{ fontWeight: 700, fontSize: 14, minWidth: 130, textAlign: "center" }}>
@@ -656,14 +661,15 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
                     )}
                   </td>
                   <td style={td}>
-                    <select
+                    <SelectMenu
                       value={r.rec?.manualStatus || ""}
-                      onChange={e => handleStatusChange(r.date, e.target.value)}
+                      onChange={v => handleStatusChange(r.date, v)}
                       disabled={statusSavingDate === r.date}
-                      style={{ ...statusSelectStyle(r.rec?.manualStatus), opacity: statusSavingDate === r.date ? 0.6 : 1 }}
-                    >
-                      {MANUAL_STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                    </select>
+                      options={MANUAL_STATUS_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
+                      minWidth={140}
+                      align="right"
+                      ariaLabel="Status"
+                    />
                     {statusError?.date === r.date && (
                       <div style={{ color: COLORS.red, fontSize: 11, fontWeight: 600, marginTop: 4, maxWidth: 140 }}>
                         {statusError.message}

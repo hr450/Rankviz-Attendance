@@ -4,6 +4,7 @@ import { COLORS, DEPARTMENTS, COMPANY_EMAIL_DOMAIN } from "../lib/constants";
 import { uid } from "../lib/utils";
 import { upsertEmployeeCredentials } from "../lib/db";
 import { IconBtn, Field, inputStyle, primaryBtn, secondaryBtn, th, td } from "../components/ui";
+import SelectMenu from "../components/SelectMenu";
 
 // An employee counts as "active" (in the auto sense) if they've had ANY of
 // these within the last AUTO_INACTIVE_DAYS: an office check-in, a WFH
@@ -256,14 +257,22 @@ function EmployeeModal({ initial, employees, onClose, onSave }) {
         {emailError && <div style={{ color: COLORS.red, fontSize: 12, fontWeight: 600, marginTop: 6 }}>{emailError}</div>}
       </Field>
       <Field label="Department">
-        <select value={form.department} onChange={e => setForm({ ...form, department: e.target.value })} style={inputStyle}>
-          {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
-        </select>
+        <SelectMenu
+          value={form.department}
+          onChange={v => setForm({ ...form, department: v })}
+          options={DEPARTMENTS.map(d => ({ value: d, label: d }))}
+          minWidth={200}
+          ariaLabel="Department"
+        />
       </Field>
       <Field label="Employment type">
-        <select value={form.employmentType} onChange={e => setForm({ ...form, employmentType: e.target.value })} style={inputStyle}>
-          {["Full-time", "Part-time", "Contract", "Intern"].map(t => <option key={t} value={t}>{t}</option>)}
-        </select>
+        <SelectMenu
+          value={form.employmentType}
+          onChange={v => setForm({ ...form, employmentType: v })}
+          options={["Full-time", "Part-time", "Contract", "Intern"].map(t => ({ value: t, label: t }))}
+          minWidth={200}
+          ariaLabel="Employment type"
+        />
       </Field>
       <div style={{ display: "flex", gap: 10 }}>
         <Field label="Shift start" style={{ flex: 1 }}>
