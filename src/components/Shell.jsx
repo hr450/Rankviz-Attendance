@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Building2, Users, BarChart3, FileText, X, Menu, LogOut, CalendarCheck, CalendarDays, Wallet, CalendarHeart, PieChart } from "lucide-react";
+import { Building2, Users, BarChart3, FileText, X, Menu, LogOut, CalendarCheck, CalendarDays, Wallet, CalendarHeart, PieChart, Upload } from "lucide-react";
 import { COLORS } from "../lib/constants";
 import { LogoMark } from "./ui";
 import Dropdown from "./Dropdown";
@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { id: "stats", label: "Attendance Stats", icon: PieChart },
   { id: "monthly", label: "Monthly Report", icon: FileText },
   { id: "holidays", label: "Public Holidays", icon: CalendarHeart },
+  { id: "import", label: "Attendance Import", icon: Upload },
 ];
 
 export default function Shell({ children, tab, setTab, saveState, account, onLogout, employeeFilter, setEmployeeFilter }) {

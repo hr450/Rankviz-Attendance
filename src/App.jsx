@@ -27,6 +27,7 @@ import LeaveApprovalsView from "./views/LeaveApprovals";
 import LeaveSummaryView from "./views/LeaveSummary";
 import LeaveBalancesView from "./views/LeaveBalances";
 import PublicHolidaysView from "./views/PublicHolidays";
+import AttendanceImportView from "./views/AttendanceImport";
 
 export default function App() {
   const [stage, setStage] = useState("intro"); // intro -> boot -> login -> entering -> app
@@ -51,6 +52,29 @@ export default function App() {
     if (employeeFilter === "inactive") return e.active === false;
     return true;
   });
+
+  // Attendance is fetched a year at a time. Loading the whole history on
+  // every login worked while there were a few thousand rows, but it grows by
+  // about 1,700 a month and never shrinks, so the wait would get worse every
+  // month for everyone. This keeps the login cost flat: the current year is
+  // fetched up front, and an older year is fetched only if someone opens it.
+  const [loadedYears, setLoadedYears] = useState(new Set());
+  const [loadingYear, setLoadingYear] = useState(null);
+
+  const ensureYearLoaded = useCallback(async (year) => {
+    if (!year || loadedYears.has(year) || loadingYear === year) return;
+    setLoadingYear(year);
+    try {
+      const older = await loadAttendance(`${year}-01-01`, `${year}-12-31`);
+      setAttendance(prev => ({ ...prev, ...older }));
+      setLoadedYears(prev => new Set(prev).add(year));
+    } catch {
+      // A failed fetch just means that year stays empty — the views already
+      // render "no records" for a month with nothing in it, and the person
+      // can switch away and back to retry.
+    }
+    setLoadingYear(null);
+  }, [loadedYears, loadingYear]);
 
   const [leaveTypes, setLeaveTypes] = useState([]);
   const [leaveRequests, setLeaveRequests] = useState([]);
@@ -79,9 +103,10 @@ export default function App() {
         // single rejection was failing the ENTIRE initial load for every
         // employee login. Skip it entirely on the employee side.
         const isAdmin = session.role === "admin";
+        const thisYear = new Date().getFullYear();
         const [emps, att, accts, types, requests, balances, holidays] = await Promise.all([
           loadEmployees(),
-          loadAttendance(),
+          loadAttendance(`${thisYear}-01-01`, `${thisYear}-12-31`),
           isAdmin ? loadAccounts() : Promise.resolve([]),
           loadLeaveTypes(),
           loadLeaveRequests(),
@@ -92,6 +117,7 @@ export default function App() {
         accts.forEach(a => { if (a.employeeId) byEmp[a.employeeId] = a; });
         setEmployees(emps);
         setAttendance(att);
+        setLoadedYears(new Set([thisYear]));
         setAccountsByEmp(byEmp);
         setLeaveTypes(types);
         setLeaveRequests(requests);
@@ -335,6 +361,7 @@ export default function App() {
         leaveTypes={leaveTypes}
         leaveRequests={leaveRequests.filter(r => r.employeeId === emp.id)}
         onApplyLeave={submitLeaveRequest}
+        onNeedYear={ensureYearLoaded}
       />
     );
   }
@@ -365,6 +392,7 @@ export default function App() {
             attendance={attendance}
             now={now}
             publicHolidays={publicHolidays}
+            onNeedYear={ensureYearLoaded}
           />
         )}
         {tab === "monthly" && (
@@ -376,8 +404,10 @@ export default function App() {
             onUpdateShift={updateShift}
             session={session}
             publicHolidays={publicHolidays}
+            onNeedYear={ensureYearLoaded}
           />
         )}
+        {tab === "import" && <AttendanceImportView employees={employees} />}
         {tab === "holidays" && (
           <PublicHolidaysView
             holidays={publicHolidays}
