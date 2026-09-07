@@ -39,28 +39,32 @@ export default function EmployeesView({ employees, setEmployees, accounts, refre
   const [credsFor, setCredsFor] = useState(null);
   const isOpen = editing !== null;
 
-  // Auto Active/Inactive sync — runs whenever attendance data changes.
+  // Auto-Inactive sync — runs whenever attendance data changes.
   // Employees with no activity of any kind (office punch, WFH punch,
   // approved leave, or alternate day) for more than AUTO_INACTIVE_DAYS get
-  // auto-flipped to Inactive; employees who resume activity get
-  // auto-flipped back to Active. Employees with NO attendance history at
-  // all (e.g. just added, or added before any punches came in) are left
+  // auto-flipped to Inactive. Employees with NO attendance history at all
+  // (e.g. just added, or added before any punches came in) are left
   // untouched — there's no way to tell "brand new hire" apart from "empty
   // record" from attendance alone, so this only acts once there's at least
   // one activity date to measure silence against.
+  //
+  // This deliberately only moves people one way, to Inactive. It used to
+  // move them back to Active as well, which quietly undid HR's own
+  // decision: deactivating someone saved the change, the save reloaded
+  // attendance, this effect ran, saw a recent punch and set them Active
+  // again — so the button looked broken. A punch is not a rehire, and a
+  // person's employment status is HR's call, so coming back is manual.
   useEffect(() => {
     if (!attendance || employees.length === 0) return;
     const now = new Date();
     let changed = false;
     const next = employees.map(emp => {
+      if (emp.active === false) return emp;      // already inactive — HR decides when they return
       const last = lastActivityDate(emp.id, attendance);
-      if (!last) return emp; // no history yet — leave status as-is
-      const silentDays = daysSince(last, now);
-      const shouldBeActive = silentDays <= AUTO_INACTIVE_DAYS;
-      const currentlyActive = emp.active !== false;
-      if (shouldBeActive === currentlyActive) return emp;
+      if (!last) return emp;                      // no history yet — leave status as-is
+      if (daysSince(last, now) <= AUTO_INACTIVE_DAYS) return emp;
       changed = true;
-      return { ...emp, active: shouldBeActive };
+      return { ...emp, active: false };
     });
     if (changed) setEmployees(next);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -106,8 +110,8 @@ export default function EmployeesView({ employees, setEmployees, accounts, refre
       </div>
       <p style={{ color: COLORS.muted, fontSize: 12.5, margin: "0 0 18px" }}>
         Use the Employees filter in the top bar to switch between Active, Inactive, and All — it applies here and across every other tab.
-        Active/Inactive also updates automatically: {AUTO_INACTIVE_DAYS}+ days with no check-in, WFH check-in, leave, or
-        alternate day moves someone to Inactive; any of those resuming moves them back to Active.
+        Someone with no check-in, WFH check-in, leave, or alternate day for {AUTO_INACTIVE_DAYS}+ days is moved to
+        Inactive automatically. Bringing them back is manual — use the reactivate button on their row.
       </p>
 
       {missingEmail > 0 && (
