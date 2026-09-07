@@ -319,6 +319,121 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
     XLSX.writeFile(wb, `${emp.name} - ${monthLabel}.xlsx`);
   };
 
+  // Coloured Excel export.
+  // The bundled xlsx build writes values and layout but drops fonts and fill,
+  // so this second export goes out as an HTML table instead. Excel and Google
+  // Sheets both read that and keep the background colours, which is what makes
+  // the file recognisable as the same report people already use on paper.
+  const handleExportColoured = () => {
+    const monthLabel = new Date(ym + "-01").toLocaleDateString([], { month: "long", year: "numeric" });
+
+    // Same palette as the printed monthly sheet.
+    const FILL = {
+      navy: "#1F3864", present: "#B6D7A8", holiday: "#76E8F0", leave: "#FFF200",
+      half: "#F8CBAD", absent: "#FF9999", wfh: "#BDD7EE", extra: "#F4B183",
+      short: "#FFE699", head: "#D6DCE4", band: "#F2F2F2", line: "#9BB0CE",
+    };
+    const fillFor = (label = "") => {
+      const s = label.toLowerCase();
+      if (s.includes("present")) return FILL.present;
+      if (s.includes("holiday")) return FILL.holiday;
+      if (s.includes("short")) return FILL.short;
+      if (s.includes("half")) return FILL.half;
+      if (s.includes("absent")) return FILL.absent;
+      if (s.includes("wfh") || s.includes("home")) return FILL.wfh;
+      if (s.includes("alternate") || s.includes("extra")) return FILL.extra;
+      if (s.includes("leave")) return FILL.leave;
+      return "";
+    };
+
+    const esc = (v) => String(v ?? "").replace(/[&<>"]/g, (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    const cell = (v, { bg = "", bold = false, align = "center", span = 1, color = "" } = {}) =>
+      `<td colspan="${span}" style="border:1px solid ${FILL.line};font-family:Arial;font-size:11pt;` +
+      `text-align:${align};${bg ? `background-color:${bg};` : ""}${color ? `color:${color};` : ""}` +
+      `${bold ? "font-weight:bold;" : ""}">${esc(v)}</td>`;
+
+    const HEAD = ["Date", "Day", "Status", "Check-in", "Check-out", "Office Hrs",
+                  "WFH in", "WFH out", "WFH Hrs", "Total Hrs", "Notes"];
+    const SPAN = HEAD.length;
+
+    const body = [...rows].reverse().map((r) => {
+      const officeHours = sessionHours(r.rec?.checkIn, r.rec?.checkOut);
+      const wfhHours = r.rec?.manualWfhHours != null ? r.rec.manualWfhHours : sessionHours(r.rec?.wfhCheckIn, r.rec?.wfhCheckOut);
+      const dayHours = r.rec?.manualTotalHours != null ? r.rec.manualTotalHours : totalWorkedHours(r.rec);
+      const hours = (hasAnySession(r.rec) || r.rec?.manualTotalHours != null) ? dayHours : null;
+      const wfhShown = (r.rec?.wfhCheckIn && r.rec?.wfhCheckOut) || r.rec?.manualWfhHours != null;
+      const flagged = isFlaggedNotARealCheckIn(r.rec);
+      const officeMissing = !flagged && !r.rec?.checkIn && !!r.rec?.checkOut;
+      const wfhMissing = !r.rec?.wfhCheckIn && !!r.rec?.wfhCheckOut;
+      const d = new Date(r.date + "T00:00:00");
+      const label = r.status?.label || "";
+      const bg = fillFor(label);
+
+      const vals = [
+        d.toLocaleDateString([], { day: "2-digit", month: "short" }),
+        d.toLocaleDateString([], { weekday: "short" }),
+        label,
+        flagged || officeMissing ? "No check-in" : (r.rec?.checkIn ? fmtTime(r.rec.checkIn) : "—"),
+        flagged ? fmtTime(r.rec.checkIn) + " (likely checkout)"
+          : officeMissing ? fmtTime(r.rec.checkOut)
+          : r.rec?.checkIn ? (r.rec?.checkOut ? fmtTime(r.rec.checkOut) : "No checkout") : "—",
+        (r.rec?.checkIn && r.rec?.checkOut) ? officeHours.toFixed(2) : "",
+        wfhMissing ? "No check-in" : (r.rec?.wfhCheckIn ? fmtTime(r.rec.wfhCheckIn) : "—"),
+        r.rec?.wfhCheckIn ? (r.rec?.wfhCheckOut ? fmtTime(r.rec.wfhCheckOut) : "No checkout")
+          : (wfhMissing ? fmtTime(r.rec.wfhCheckOut) : "—"),
+        wfhShown ? wfhHours.toFixed(2) : "",
+        hours != null ? hours.toFixed(2) : "",
+        noteSummaryFor(r, holidayByDate) || "",
+      ];
+      return "<tr>" + vals.map((v, i) =>
+        cell(v, {
+          bg: (i === 2 || i === 10) ? bg : "",
+          bold: i === 2,
+          align: i === 10 ? "left" : "center",
+        })).join("") + "</tr>";
+    }).join("");
+
+    const totalHours = [...rows].reduce((sum, r) => {
+      const h = r.rec?.manualTotalHours != null ? r.rec.manualTotalHours : totalWorkedHours(r.rec);
+      return sum + ((hasAnySession(r.rec) || r.rec?.manualTotalHours != null) ? h : 0);
+    }, 0);
+
+    const statPairs = [
+      ["Present", stats.present], ["Late", stats.late], ["Half day", stats.half],
+      ["Short leave", stats.shortLeave], ["WFH", stats.wfh], ["Leave", stats.leave],
+      ["Absent", stats.absent], ["Casual (CL)", stats.cl], ["Sick (SL)", stats.sl],
+      ["Annual (AL)", stats.al], ["Total hours", totalHours.toFixed(2)],
+    ];
+
+    const html =
+      `<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8">` +
+      `<!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>` +
+      `<x:Name>Attendance</x:Name><x:WorksheetOptions><x:DisplayGridlines/>` +
+      `</x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->` +
+      `</head><body><table style="border-collapse:collapse">` +
+      `<tr>${cell("RANKVIZ PVT. LTD.  |  MONTHLY ATTENDANCE", { bg: FILL.navy, color: "#FFFFFF", bold: true, span: SPAN })}</tr>` +
+      `<tr>${cell(emp.name + (emp.department && emp.department !== "Unassigned" ? "  ·  " + emp.department : "") + "  ·  " + monthLabel, { bold: true, align: "left", span: SPAN })}</tr>` +
+      `<tr>${cell("CL = Casual Leave  |  SL = Sick Leave  |  AL = Annual Leave  |  WFH = Work From Home  |  H = Holiday", { align: "left", span: SPAN })}</tr>` +
+      `<tr>${cell("SUMMARY", { bg: FILL.navy, color: "#FFFFFF", bold: true, span: SPAN })}</tr>` +
+      `<tr>${statPairs.map(([k]) => cell(k, { bg: FILL.head, bold: true })).join("")}</tr>` +
+      `<tr>${statPairs.map(([, v]) => cell(v, { bg: FILL.band, bold: true })).join("")}</tr>` +
+      `<tr>${cell("DAY BY DAY", { bg: FILL.navy, color: "#FFFFFF", bold: true, span: SPAN })}</tr>` +
+      `<tr>${HEAD.map((h) => cell(h, { bg: FILL.navy, color: "#FFFFFF", bold: true })).join("")}</tr>` +
+      body +
+      `<tr>${cell("TOTAL", { bg: FILL.head, bold: true, span: 9 })}${cell(totalHours.toFixed(2), { bg: FILL.head, bold: true })}${cell("", { bg: FILL.head })}</tr>` +
+      `</table></body></html>`;
+
+    const blob = new Blob(["\ufeff", html], { type: "application/vnd.ms-excel" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `${emp.name} - ${monthLabel} (coloured).xls`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  };
+
   if (!emp) return <p style={{ color: COLORS.muted }}>No employees yet — add some in the Employees tab first.</p>;
 
   return (
@@ -388,6 +503,18 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
             }}
           >
             <Download size={14} /> Download Excel
+          </button>
+
+          <button
+            onClick={handleExportColoured}
+            title="Download with the report colours, the way the printed sheet looks"
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              background: "#fff", border: `1px solid ${COLORS.line}`, borderRadius: 8,
+              padding: "7px 13px", fontSize: 13, fontWeight: 700, color: COLORS.ink, cursor: "pointer",
+            }}
+          >
+            <Download size={14} /> Download coloured
           </button>
         </div>
         <table className="rv-table-hover" style={{ width: "100%", borderCollapse: "collapse", minWidth: 940 }}>
