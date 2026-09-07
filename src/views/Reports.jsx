@@ -6,7 +6,7 @@ import {
 import { COLORS, GRACE_MIN, HALFDAY_HOURS } from "../lib/constants";
 import { computeStatus, fmtHrs, monthKey, daysInMonth, todayStr } from "../lib/utils";
 import { th, td, StatCard } from "../components/ui";
-import SelectMenu from "../components/SelectMenu";
+import Dropdown from "../components/Dropdown";
 
 export default function ReportsView({ employees, attendance, now }) {
   const [ym, setYm] = useState(monthKey(todayStr(now)));
@@ -135,7 +135,7 @@ export default function ReportsView({ employees, attendance, now }) {
               style={{ ...searchInput }}
             />
           </div>
-          <SelectMenu
+          <Dropdown
             value={sortBy}
             onChange={setSortBy}
             options={[

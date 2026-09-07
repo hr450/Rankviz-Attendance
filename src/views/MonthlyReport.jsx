@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight, ChevronDown, Coffee, Repeat, Home, Pencil, X
 import { COLORS, MANUAL_STATUS_OPTIONS } from "../lib/constants";
 import { computeStatus, isFlaggedNotARealCheckIn, fmtTime, fmtHrs, monthKey, daysInMonth, todayStr } from "../lib/utils";
 import { StatusPill, StatCard, selectStyle, th, td } from "../components/ui";
-import SelectMenu from "../components/SelectMenu";
+import Dropdown from "../components/Dropdown";
 
 // Nicer look for the Status-Edit dropdown and the employee/month pickers —
 // layered on top of the shared `selectStyle` from components/ui so we don't
@@ -436,7 +436,7 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
       <h1 className="rv-header-in" style={{ fontSize: 26, fontWeight: 800, margin: "0 0 18px" }}>Monthly Report</h1>
 
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 20 }}>
-        <SelectMenu
+        <Dropdown
           value={empId}
           onChange={setEmpId}
           options={employees.map(e => ({ value: e.id, label: e.name }))}
@@ -661,11 +661,13 @@ export default function MonthlyReportView({ employees, attendance, now, onSaveEd
                     )}
                   </td>
                   <td style={td}>
-                    <SelectMenu
+                    <Dropdown
                       value={r.rec?.manualStatus || ""}
                       onChange={v => handleStatusChange(r.date, v)}
+                      options={MANUAL_STATUS_OPTIONS}
+                      saving={statusSavingDate === r.date}
                       disabled={statusSavingDate === r.date}
-                      options={MANUAL_STATUS_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
+                      showDots
                       minWidth={140}
                       align="right"
                       ariaLabel="Status"

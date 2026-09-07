@@ -4,7 +4,7 @@ import { COLORS, DEPARTMENTS, COMPANY_EMAIL_DOMAIN } from "../lib/constants";
 import { uid } from "../lib/utils";
 import { upsertEmployeeCredentials } from "../lib/db";
 import { IconBtn, Field, inputStyle, primaryBtn, secondaryBtn, th, td } from "../components/ui";
-import SelectMenu from "../components/SelectMenu";
+import Dropdown from "../components/Dropdown";
 
 // An employee counts as "active" (in the auto sense) if they've had ANY of
 // these within the last AUTO_INACTIVE_DAYS: an office check-in, a WFH
@@ -257,7 +257,7 @@ function EmployeeModal({ initial, employees, onClose, onSave }) {
         {emailError && <div style={{ color: COLORS.red, fontSize: 12, fontWeight: 600, marginTop: 6 }}>{emailError}</div>}
       </Field>
       <Field label="Department">
-        <SelectMenu
+        <Dropdown
           value={form.department}
           onChange={v => setForm({ ...form, department: v })}
           options={DEPARTMENTS.map(d => ({ value: d, label: d }))}
@@ -266,7 +266,7 @@ function EmployeeModal({ initial, employees, onClose, onSave }) {
         />
       </Field>
       <Field label="Employment type">
-        <SelectMenu
+        <Dropdown
           value={form.employmentType}
           onChange={v => setForm({ ...form, employmentType: v })}
           options={["Full-time", "Part-time", "Contract", "Intern"].map(t => ({ value: t, label: t }))}

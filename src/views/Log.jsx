@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import { COLORS } from "../lib/constants";
 import { computeStatus, fmtTime, fmtHrs, todayStr } from "../lib/utils";
 import { StatusPill, selectStyle, th, td } from "../components/ui";
-import SelectMenu from "../components/SelectMenu";
+import Dropdown from "../components/Dropdown";
 
 export default function LogView({ employees, attendance, now }) {
   const [empFilter, setEmpFilter] = useState("all");
@@ -37,7 +37,7 @@ export default function LogView({ employees, attendance, now }) {
       <h1 className="rv-header-in" style={{ fontSize: 26, fontWeight: 800, margin: "0 0 18px" }}>Attendance Log</h1>
 
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 18 }}>
-        <SelectMenu
+        <Dropdown
           value={empFilter}
           onChange={setEmpFilter}
           options={[{ value: "all", label: "All employees" },
