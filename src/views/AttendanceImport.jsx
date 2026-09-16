@@ -55,11 +55,13 @@ export default function AttendanceImportView({ employees }) {
     if (inputRef.current) inputRef.current.value = "";
   };
 
-  const handleFile = async (f) => {
+  // yearOverride is set when HR picks a year from the dropdown; without it
+  // the year is guessed from the file name, as before.
+  const handleFile = async (f, yearOverride) => {
     if (!f) return;
     setError(null); setParsed(null); setResult(null); setProgress(null);
     setFile(f);
-    const year = guessYearFromName(f.name);
+    const year = yearOverride ?? guessYearFromName(f.name);
     setFileYear(year);
     try {
       const buf = await f.arrayBuffer();
@@ -132,7 +134,7 @@ export default function AttendanceImportView({ employees }) {
               Year
               <Dropdown
                 value={fileYear}
-                onChange={(y) => { setFileYear(y); if (file) handleFile(file); }}
+                onChange={(y) => { if (file) handleFile(file, Number(y)); else setFileYear(Number(y)); }}
                 options={[YEAR_NOW - 2, YEAR_NOW - 1, YEAR_NOW, YEAR_NOW + 1].map(y => ({ value: y, label: String(y) }))}
                 minWidth={104}
               />

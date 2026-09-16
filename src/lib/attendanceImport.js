@@ -484,7 +484,7 @@ function excelSerialToTimeParts(serial){
 }
 const EMP_SHEET_LEAVE_RE = /\b(cl|sl|leave)\b/i;
 
-function buildRowsFromEmployeeSheet(sheetName, grid, headerIdx, colMap, lateRule){
+function buildRowsFromEmployeeSheet(sheetName, grid, headerIdx, colMap, lateRule, fileYear){
   const employeeName = extractEmployeeNameFromSheetTop(grid, headerIdx) || sheetName;
   const rows = [];
   const pad = n => String(n).padStart(2, '0');
@@ -513,7 +513,7 @@ function buildRowsFromEmployeeSheet(sheetName, grid, headerIdx, colMap, lateRule
       // Some months are typed as text instead of real dates ("01-Jun"),
       // with no year on them — the year comes from the file name, same
       // as it does for day-per-tab workbooks.
-      dp = parseSheetTabDate(dateCell.trim(), state.fileYear);
+      dp = parseSheetTabDate(dateCell.trim(), fileYear);
       if (!dp) continue; // a heading or summary label, not a day
     } else {
       continue; // blank or something that isn't a date at all
@@ -611,9 +611,9 @@ function buildRowsFromEmployeeSheet(sheetName, grid, headerIdx, colMap, lateRule
   return rows;
 }
 
-function buildRowsFromEmployeeSheets(sheets){
+function buildRowsFromEmployeeSheets(sheets, fileYear){
   let all = [];
-  sheets.forEach(s => { all = all.concat(buildRowsFromEmployeeSheet(s.sheetName, s.grid, s.headerIdx, s.colMap, s.lateRule)); });
+  sheets.forEach(s => { all = all.concat(buildRowsFromEmployeeSheet(s.sheetName, s.grid, s.headerIdx, s.colMap, s.lateRule, fileYear)); });
   return all;
 }
 /* ---------------- mapping: excel row -> API payload ---------------- */
@@ -827,7 +827,7 @@ export function parseWorkbook(wb, ctx = {}) {
   } else if (detected.type === 'daySheets') {
     rows = buildRowsFromDaySheets(detected.sheets);
   } else if (detected.type === 'employeeSheets') {
-    rows = buildRowsFromEmployeeSheets(detected.sheets);
+    rows = buildRowsFromEmployeeSheets(detected.sheets, fileYear);
   } else {
     rows = buildRowsFromColumnMap(detected.grid, detected.headerIdx, detected.colMap);
   }
