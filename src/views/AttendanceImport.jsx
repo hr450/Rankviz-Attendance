@@ -1,7 +1,8 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
-import { Upload, FileSpreadsheet, AlertTriangle, CheckCircle2, X } from "lucide-react";
-import { COLORS } from "../lib/constants";
+import { Upload, FileSpreadsheet, AlertTriangle, CheckCircle2, X, UserPlus } from "lucide-react";
+import { COLORS, DEPARTMENTS } from "../lib/constants";
+import { uid } from "../lib/utils";
 import { nameKey, parseWorkbook } from "../lib/attendanceImport";
 import { saveAttendanceRecord } from "../lib/db";
 import Dropdown from "../components/Dropdown";
@@ -23,7 +24,7 @@ function guessYearFromName(fileName) {
   return m ? Number(m[1]) : YEAR_NOW;
 }
 
-export default function AttendanceImportView({ employees }) {
+export default function AttendanceImportView({ employees, setEmployees }) {
   const [file, setFile] = useState(null);
   const [fileYear, setFileYear] = useState(YEAR_NOW);
   const [parsed, setParsed] = useState(null);   // { rows, payloads, unmatched, format }
@@ -31,6 +32,8 @@ export default function AttendanceImportView({ employees }) {
   const [confirming, setConfirming] = useState(false);
   const [progress, setProgress] = useState(null); // { done, total, failed }
   const [result, setResult] = useState(null);
+  const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState(null);
   const inputRef = useRef(null);
 
   // The three lookups mapRows() needs to turn a name or device id on the
@@ -73,6 +76,46 @@ export default function AttendanceImportView({ employees }) {
       setError(e.message || "Couldn't read that file.");
     }
   };
+
+  // A name on the sheet that isn't in the app yet can be added straight
+  // from here, as well as from the Employees tab. It gets the same defaults
+  // as a blank "Add employee" form; email, device ID and shift can be filled
+  // in on the Employees tab later. A name already in the app (ignoring
+  // spacing, dots and case) is never added a second time.
+  const addEmployees = async (names) => {
+    if (!setEmployees || !names.length) return;
+    const existing = new Set(employees.map(e => nameKey(e.name)));
+    const fresh = [];
+    for (const n of names) {
+      const k = nameKey(n);
+      if (!k || existing.has(k)) continue;
+      existing.add(k);
+      fresh.push({
+        id: uid("emp"), name: n, department: DEPARTMENTS[0], employmentType: "Full-time",
+        shiftStart: "09:30", shiftEnd: "18:30", graceMinutes: "", zkUserId: "", email: "", active: true,
+      });
+    }
+    if (!fresh.length) return;
+    setAdding(true); setAddError(null);
+    const ok = await setEmployees([...employees, ...fresh]);
+    setAdding(false);
+    if (ok === false) setAddError("Couldn't save the new employee. Reload the page and try again.");
+  };
+
+  const addAll = () => {
+    if (!unmatched.length) return;
+    const msg = `Add ${unmatched.length} new employee${unmatched.length === 1 ? "" : "s"}?\n\n` +
+      `Only do this if they're all new people. Anyone already in the app under a different spelling would get a second profile.`;
+    if (window.confirm(msg)) addEmployees(unmatched);
+  };
+
+  // When the employee list changes (someone was just added, here or on the
+  // Employees tab), check the loaded file again so their days move into
+  // "Ready to write" without choosing the file a second time.
+  useEffect(() => {
+    if (file && parsed && !progress && !result) handleFile(file, fileYear);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lookups]);
 
   const send = async () => {
     if (!parsed?.payloads?.length) return;
@@ -171,15 +214,43 @@ export default function AttendanceImportView({ employees }) {
                 <AlertTriangle size={15} color={COLORS.amber} /> {unmatched.length} name{unmatched.length === 1 ? "" : "s"} didn't match an employee
               </h3>
               <p style={{ margin: "0 0 10px", fontSize: 12.5, color: COLORS.muted }}>
-                These rows will be skipped. Fix the spelling in the sheet, or set the person's device ID on the
-                Employees tab, then load the file again.
+                These rows will be skipped. If it's a new person, click <strong>Add</strong> to create them as an
+                employee. If they're already in the app under a different spelling, fix the spelling in the sheet
+                or on the Employees tab instead, so they don't end up with two profiles.
               </p>
+              {setEmployees && (
+                <div style={{ marginBottom: 10 }}>
+                  <button onClick={addAll} disabled={adding} style={{ ...secondaryBtn, padding: "6px 12px", fontSize: 12.5, opacity: adding ? 0.6 : 1 }}>
+                    <UserPlus size={14} /> {adding ? "Adding…" : `Add all ${unmatched.length} as new employees`}
+                  </button>
+                </div>
+              )}
+              {addError && (
+                <p style={{ margin: "0 0 10px", color: COLORS.red, fontSize: 12.5, fontWeight: 600 }}>{addError}</p>
+              )}
               <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
                 {unmatched.map(n => (
                   <span key={n} style={{
+                    display: "inline-flex", alignItems: "center", gap: 6,
                     background: "#FBF0DC", color: "#8A6200", fontWeight: 700, fontSize: 12,
-                    padding: "4px 10px", borderRadius: 999,
-                  }}>{n}</span>
+                    padding: "4px 5px 4px 10px", borderRadius: 999,
+                  }}>
+                    {n}
+                    {setEmployees && (
+                      <button
+                        onClick={() => addEmployees([n])}
+                        disabled={adding}
+                        title={`Add ${n} as a new employee`}
+                        style={{
+                          display: "inline-flex", alignItems: "center", gap: 3, border: "none", cursor: "pointer",
+                          background: "#fff", color: "#8A6200", fontWeight: 700, fontSize: 11,
+                          padding: "2px 8px", borderRadius: 999,
+                        }}
+                      >
+                        <UserPlus size={11} /> Add
+                      </button>
+                    )}
+                  </span>
                 ))}
               </div>
             </div>

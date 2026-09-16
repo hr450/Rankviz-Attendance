@@ -263,8 +263,10 @@ export default function App() {
     const prev = employees;
     setEmployees(next);
     setSaveState("saving");
-    try { await saveEmployees(next, prev); setSaveState("saved"); }
-    catch { setSaveState("error"); }
+    // Returns true/false so callers that need to know (Attendance Import's
+    // "Add employee") can say when a save didn't go through.
+    try { await saveEmployees(next, prev); setSaveState("saved"); return true; }
+    catch { setSaveState("error"); return false; }
   }, [employees]);
 
   /* Raw punch — goes through /api/attendance/punch (see lib/db.js webPunch),
@@ -407,7 +409,7 @@ export default function App() {
             onNeedYear={ensureYearLoaded}
           />
         )}
-        {tab === "import" && <AttendanceImportView employees={employees} />}
+        {tab === "import" && <AttendanceImportView employees={employees} setEmployees={persistEmployees} />}
         {tab === "holidays" && (
           <PublicHolidaysView
             holidays={publicHolidays}
