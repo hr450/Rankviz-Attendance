@@ -89,6 +89,19 @@ const STATUS_LOOKUP = (() => {
    letters is stripped before comparing. */
 function nameKey(v){ return String(v==null?'':v).toLowerCase().replace(/[^a-z]/g,''); }
 
+/* A name as it should be shown and matched: anything after the person's
+   actual name is dropped — "(1)" / "(2)" that Excel adds to copied tabs,
+   brackets, numbers, emoji and other icons. "Abdul Basit (1) ✅" becomes
+   "Abdul Basit". Letters, spaces, dots, apostrophes and hyphens stay. */
+function cleanPersonName(v){
+  return String(v==null?'':v)
+    .replace(/[\(\[\{][^\)\]\}]*[\)\]\}]/g, ' ')
+    .replace(/[^\p{L}\s.'-]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/^[\s.'-]+|[\s.'-]+$/g, '')
+    .trim();
+}
+
 function normStatus(v){
   const k = String(v == null ? '' : v).trim().toLowerCase().replace(/[^a-z]/g, '');
   if (!k) return '';
@@ -661,6 +674,7 @@ function mapRows(rows, state){
   // disagree with the sheet on employees whose shift differs.
   const sheetMarksLate = rows.some(r => normStatus(r.status) === 'late');
   return rows.map(row => {
+    row = { ...row, name: cleanPersonName(row.name) };
     const dateParts = parseDate(row.date);
     const out = { ...row, skip:false, skipReason:'', payload:null, employeeId:null, matchType:null };
     if (!dateParts) { out.skip = true; out.skipReason = 'Unparseable date'; return out; }
@@ -693,7 +707,7 @@ function mapRows(rows, state){
       }
     }
     out.employeeId = employeeId; out.matchType = matchType;
-    if (!employeeId) { out.skip = true; out.skipReason = 'No matching employee (check Emp ID / zkUserId)'; return out; }
+    if (!employeeId) { out.skip = true; out.noMatch = true; out.skipReason = 'No matching employee (check Emp ID / zkUserId)'; return out; }
 
     const clockIn = parseTime(row.clockIn), clockOut = parseTime(row.clockOut);
     const wfhIn = parseTime(row.wfhIn), wfhOut = parseTime(row.wfhOut);
@@ -844,7 +858,10 @@ export function parseWorkbook(wb, ctx = {}) {
   const unmatchedSet = new Set();
   for (const m of mapped) {
     if (m.payload && m.payload.employeeId) payloads.push({ ...m.payload, name: m.name });
-    else if (m.name) unmatchedSet.add(m.name);
+    // Only a real failed match counts. Days skipped for other reasons
+    // (future dates, blank days, "left") belong to matched people and
+    // used to land here too, listing everyone as unmatched.
+    else if (m.noMatch && m.name) unmatchedSet.add(m.name);
   }
 
   const unknownStatuses = [...new Set(mapped.filter(m => m.unknownStatus).map(m => m.unknownStatus))];
